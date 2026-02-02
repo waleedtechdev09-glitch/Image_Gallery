@@ -36,20 +36,15 @@ const SignUpPage = () => {
     setError("");
 
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/register", {
+      await axios.post("http://localhost:5000/api/auth/register", {
         name: formData.username,
         email: formData.email,
         password: formData.password,
       });
 
-      // If backend returns token after signup
-      if (res.data.token) {
-        setToken(res.data.token); // save token in cookies
-        router.push("/homePage"); // navigate to home
-      } else {
-        alert("User registered successfully! Please login.");
-        router.push("/"); // fallback to login if no token
-      }
+      alert("User registered successfully! Please login.");
+
+      router.push("/"); // always go to login page
     } catch (err: any) {
       setError(err.response?.data?.message || "Registration failed");
     } finally {
