@@ -1,51 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { Home, ImageIcon, Settings, Plus, Trash2 } from "lucide-react";
 import axios from "axios";
 import { getToken } from "../utils/auth";
-import { useRouter } from "next/navigation";
 
 interface SidebarProps {
+  folders: { _id: string; name: string }[];
+  setFolders: React.Dispatch<
+    React.SetStateAction<{ _id: string; name: string }[]>
+  >;
   setActiveView: (view: "dashboard" | "images" | "settings") => void;
   fetchImages: (folderId?: string | null) => Promise<void>;
   selectedFolder: string | null;
   setSelectedFolder: (id: string | null) => void;
 }
 
-interface Folder {
-  _id: string;
-  name: string;
-}
-
 const SideBar = ({
+  folders,
+  setFolders,
   setActiveView,
   fetchImages,
   selectedFolder,
   setSelectedFolder,
 }: SidebarProps) => {
-  const [folders, setFolders] = useState<Folder[]>([]);
   const API_URL = "http://localhost:5000";
   const token = getToken();
-  const router = useRouter();
-
-  // ------------------ Fetch folders ------------------
-  const fetchFolders = async () => {
-    if (!token) return;
-    try {
-      const res = await axios.get(`${API_URL}/api/folders`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setFolders(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    fetchFolders();
-  }, []);
 
   // ------------------ Add folder ------------------
   const handleAddFolder = async () => {
@@ -58,14 +38,9 @@ const SideBar = ({
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      // Add folder to state
       setFolders((prev) => [...prev, res.data]);
-
-      // Select new folder & update route
       setSelectedFolder(res.data._id);
-      router.push(`/homePage/${res.data._id}`);
-
-      // Fetch images for the new folder
+      setActiveView("images");
       await fetchImages(res.data._id);
     } catch (err) {
       console.error(err);
@@ -84,13 +59,13 @@ const SideBar = ({
 
       setFolders((prev) => prev.filter((f) => f._id !== id));
 
-      // If deleted folder was selected, clear selection & go default route
       if (selectedFolder === id) {
         setSelectedFolder(null);
-        router.push(`/homePage`);
+        setActiveView("dashboard");
+        await fetchImages(null);
+      } else {
+        await fetchImages(selectedFolder);
       }
-
-      await fetchImages(null); // refresh images grid
     } catch (err) {
       console.error(err);
       alert("Folder deletion failed");
@@ -100,7 +75,7 @@ const SideBar = ({
   // ------------------ Select folder ------------------
   const handleSelectFolder = async (id: string) => {
     setSelectedFolder(id);
-    router.push(`/homePage/${id}`);
+    setActiveView("images");
     await fetchImages(id);
   };
 
@@ -122,9 +97,7 @@ const SideBar = ({
             className="flex justify-between items-center px-2 py-1 rounded hover:bg-gray-100"
           >
             <span
-              className={`cursor-pointer ${
-                selectedFolder === f._id ? "font-semibold" : ""
-              }`}
+              className={`cursor-pointer ${selectedFolder === f._id ? "font-semibold" : ""}`}
               onClick={() => handleSelectFolder(f._id)}
             >
               {f.name}

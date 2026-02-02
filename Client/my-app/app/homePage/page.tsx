@@ -1,3 +1,6 @@
+import HomePage from "@/components/HomePage";
+
+export default HomePage;
 // "use client";
 
 // import { useEffect, useState, useRef } from "react";
