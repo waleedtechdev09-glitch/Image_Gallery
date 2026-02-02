@@ -5,10 +5,11 @@ import { Button } from "./ui/button";
 import { Home, ImageIcon, Settings, Plus, Trash2 } from "lucide-react";
 import axios from "axios";
 import { getToken } from "../utils/auth";
+import { useRouter } from "next/navigation";
 
 interface SidebarProps {
   setActiveView: (view: "dashboard" | "images" | "settings") => void;
-  fetchImages: () => Promise<void>;
+  fetchImages: (folderId?: string | null) => Promise<void>;
   selectedFolder: string | null;
   setSelectedFolder: (id: string | null) => void;
 }
@@ -27,7 +28,9 @@ const SideBar = ({
   const [folders, setFolders] = useState<Folder[]>([]);
   const API_URL = "http://localhost:5000";
   const token = getToken();
+  const router = useRouter();
 
+  // ------------------ Fetch folders ------------------
   const fetchFolders = async () => {
     if (!token) return;
     try {
@@ -44,6 +47,7 @@ const SideBar = ({
     fetchFolders();
   }, []);
 
+  // ------------------ Add folder ------------------
   const handleAddFolder = async () => {
     const name = prompt("Enter folder name:");
     if (!name || !token) return;
@@ -54,18 +58,22 @@ const SideBar = ({
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      // Update folders instantly
+      // Add folder to state
       setFolders((prev) => [...prev, res.data]);
+
+      // Select new folder & update route
       setSelectedFolder(res.data._id);
+      router.push(`/homePage/${res.data._id}`);
 
       // Fetch images for the new folder
-      await fetchImages();
+      await fetchImages(res.data._id);
     } catch (err) {
       console.error(err);
       alert("Failed to create folder");
     }
   };
 
+  // ------------------ Delete folder ------------------
   const handleDeleteFolder = async (id: string) => {
     if (!token) return;
     if (!window.confirm("Delete this folder and all its images?")) return;
@@ -76,18 +84,24 @@ const SideBar = ({
 
       setFolders((prev) => prev.filter((f) => f._id !== id));
 
-      if (selectedFolder === id) setSelectedFolder(null);
+      // If deleted folder was selected, clear selection & go default route
+      if (selectedFolder === id) {
+        setSelectedFolder(null);
+        router.push(`/homePage`);
+      }
 
-      await fetchImages(); // refresh images grid
+      await fetchImages(null); // refresh images grid
     } catch (err) {
       console.error(err);
       alert("Folder deletion failed");
     }
   };
 
+  // ------------------ Select folder ------------------
   const handleSelectFolder = async (id: string) => {
-    setSelectedFolder(id); // update selected folder
-    await fetchImages(); // immediately fetch images for this folder
+    setSelectedFolder(id);
+    router.push(`/homePage/${id}`);
+    await fetchImages(id);
   };
 
   return (
@@ -96,7 +110,7 @@ const SideBar = ({
 
       <Button
         onClick={handleAddFolder}
-        className="flex items-center gap-2 bg-green-500 text-white mb-4"
+        className="flex items-center gap-2 bg-green-500 text-white mb-4 cursor-pointer"
       >
         <Plus size={16} /> New Folder
       </Button>
@@ -117,7 +131,7 @@ const SideBar = ({
             </span>
             <button
               onClick={() => handleDeleteFolder(f._id)}
-              className="text-red-500 hover:text-red-700"
+              className="text-red-500 hover:text-red-700 cursor-pointer"
             >
               <Trash2 size={16} />
             </button>
@@ -128,24 +142,24 @@ const SideBar = ({
       <nav className="flex flex-col gap-3 mb-auto">
         <Button
           variant="ghost"
-          className="justify-start"
+          className="justify-start cursor-pointer"
           onClick={() => setActiveView("dashboard")}
         >
           <Home size={18} /> Dashboard
         </Button>
         <Button
           variant="ghost"
-          className="justify-start"
+          className="justify-start cursor-pointer"
           onClick={async () => {
             setActiveView("images");
-            await fetchImages();
+            await fetchImages(selectedFolder);
           }}
         >
           <ImageIcon size={18} /> My Images
         </Button>
         <Button
           variant="ghost"
-          className="justify-start"
+          className="justify-start cursor-pointer"
           onClick={() => setActiveView("settings")}
         >
           <Settings size={18} /> Settings
