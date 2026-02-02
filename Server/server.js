@@ -5,7 +5,8 @@ import cors from 'cors'
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import imageRoutes from "./routes/imageRoutes.js";
-import folderRoutes from "./controllers/folders.js";
+import folderRoutes from "./routes/folderRoute.js";
+
 dotenv.config();
 const app = express();
 

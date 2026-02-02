@@ -1,34 +1,15 @@
 import express from "express";
-import { uploadImage, getUserImages, deleteImage } from "../controllers/imageController.js";
-import { authenticate } from "../middleware/auth.js";
-import { upload } from "../middleware/upload.js";
+import { uploadImage, getImages, deleteImage } from "../controllers/imageController.js";
+import { protect } from "../middleware/authMiddleware.js";
+import multer from "multer";
 
 const router = express.Router();
+const upload = multer({ dest: "uploads/" });
 
-// Upload image (requires auth)
-router.post(
-  "/upload",
-  authenticate,
-  (req, res, next) => {
-    console.log("Before multer", req.body);
-    next();
-  },
-  upload.single("image"),
-  (req, res, next) => {
-    console.log("After multer", req.file);
-    next();
-  },
-  uploadImage
-);
+router.use(protect);
 
-
-
-
-
-// Get all images for user
-router.get("/", authenticate, getUserImages);
-
-// Delete image
-router.delete("/:id", authenticate, deleteImage);
+router.post("/upload", upload.single("image"), uploadImage);
+router.get("/", getImages);
+router.delete("/:id", deleteImage);
 
 export default router;

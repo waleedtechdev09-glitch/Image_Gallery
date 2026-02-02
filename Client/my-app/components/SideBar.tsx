@@ -9,6 +9,8 @@ import { getToken } from "../utils/auth";
 interface SidebarProps {
   setActiveView: (view: "dashboard" | "images" | "settings") => void;
   fetchImages: () => Promise<void>;
+  selectedFolder: string | null;
+  setSelectedFolder: (id: string | null) => void;
 }
 
 interface Folder {
@@ -16,23 +18,25 @@ interface Folder {
   name: string;
 }
 
-const SideBar = ({ setActiveView, fetchImages }: SidebarProps) => {
+const SideBar = ({
+  setActiveView,
+  fetchImages,
+  selectedFolder,
+  setSelectedFolder,
+}: SidebarProps) => {
   const [folders, setFolders] = useState<Folder[]>([]);
   const API_URL = "http://localhost:5000";
   const token = getToken();
 
-  // 🔹 Fetch folders from backend
   const fetchFolders = async () => {
     if (!token) return;
-
     try {
       const res = await axios.get(`${API_URL}/api/folders`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       setFolders(res.data);
     } catch (err) {
-      console.error("Failed to fetch folders", err);
+      console.error(err);
     }
   };
 
@@ -40,77 +44,80 @@ const SideBar = ({ setActiveView, fetchImages }: SidebarProps) => {
     fetchFolders();
   }, []);
 
-  // 🔹 Create new folder
   const handleAddFolder = async () => {
-    const folderName = prompt("Enter folder name:");
-    if (!folderName || !token) return;
-
+    const name = prompt("Enter folder name:");
+    if (!name || !token) return;
     try {
       const res = await axios.post(
         `${API_URL}/api/folders`,
-        { name: folderName },
+        { name },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
+      // Update folders instantly
       setFolders((prev) => [...prev, res.data]);
+      setSelectedFolder(res.data._id);
+
+      // Fetch images for the new folder
+      await fetchImages();
     } catch (err) {
-      console.error("Failed to create folder", err);
-      alert("Folder creation failed");
+      console.error(err);
+      alert("Failed to create folder");
     }
   };
 
-  // 🔹 DELETE FOLDER FUNCTION
   const handleDeleteFolder = async (id: string) => {
     if (!token) return;
-
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this folder?",
-    );
-
-    if (!confirmDelete) return;
-
+    if (!window.confirm("Delete this folder and all its images?")) return;
     try {
       await axios.delete(`${API_URL}/api/folders/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // UI se remove kar do
-      setFolders((prev) => prev.filter((folder) => folder._id !== id));
+      setFolders((prev) => prev.filter((f) => f._id !== id));
 
-      alert("Folder deleted successfully");
+      if (selectedFolder === id) setSelectedFolder(null);
+
+      await fetchImages(); // refresh images grid
     } catch (err) {
-      console.error("Failed to delete folder", err);
+      console.error(err);
       alert("Folder deletion failed");
     }
+  };
+
+  const handleSelectFolder = async (id: string) => {
+    setSelectedFolder(id); // update selected folder
+    await fetchImages(); // immediately fetch images for this folder
   };
 
   return (
     <aside className="w-64 bg-white shadow-md p-6 hidden md:flex flex-col h-screen sticky top-0">
       <h2 className="text-2xl font-bold mb-4">Library System</h2>
 
-      {/* + button for folder creation */}
-      <div className="mb-4">
-        <Button
-          onClick={handleAddFolder}
-          className="flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 cursor-pointer"
-        >
-          <Plus size={16} /> New Folder
-        </Button>
-      </div>
+      <Button
+        onClick={handleAddFolder}
+        className="flex items-center gap-2 bg-green-500 text-white mb-4"
+      >
+        <Plus size={16} /> New Folder
+      </Button>
 
-      {/* Folders list WITH DELETE BUTTON */}
       <ul className="flex flex-col gap-1 mb-6">
-        {folders.map((folder) => (
+        {folders.map((f) => (
           <li
-            key={folder._id}
-            className="flex justify-between items-center text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+            key={f._id}
+            className="flex justify-between items-center px-2 py-1 rounded hover:bg-gray-100"
           >
-            <span className="cursor-pointer">{folder.name}</span>
-
+            <span
+              className={`cursor-pointer ${
+                selectedFolder === f._id ? "font-semibold" : ""
+              }`}
+              onClick={() => handleSelectFolder(f._id)}
+            >
+              {f.name}
+            </span>
             <button
-              onClick={() => handleDeleteFolder(folder._id)}
+              onClick={() => handleDeleteFolder(f._id)}
               className="text-red-500 hover:text-red-700"
-              title="Delete Folder"
             >
               <Trash2 size={16} />
             </button>
@@ -118,19 +125,17 @@ const SideBar = ({ setActiveView, fetchImages }: SidebarProps) => {
         ))}
       </ul>
 
-      {/* Navigation */}
       <nav className="flex flex-col gap-3 mb-auto">
         <Button
           variant="ghost"
-          className="justify-start w-full flex items-center gap-2 cursor-pointer"
+          className="justify-start"
           onClick={() => setActiveView("dashboard")}
         >
           <Home size={18} /> Dashboard
         </Button>
-
         <Button
           variant="ghost"
-          className="justify-start w-full flex items-center gap-2 cursor-pointer"
+          className="justify-start"
           onClick={async () => {
             setActiveView("images");
             await fetchImages();
@@ -138,10 +143,9 @@ const SideBar = ({ setActiveView, fetchImages }: SidebarProps) => {
         >
           <ImageIcon size={18} /> My Images
         </Button>
-
         <Button
           variant="ghost"
-          className="justify-start w-full flex items-center gap-2 cursor-pointer"
+          className="justify-start"
           onClick={() => setActiveView("settings")}
         >
           <Settings size={18} /> Settings

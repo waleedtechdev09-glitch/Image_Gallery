@@ -1,58 +1,52 @@
-import express from "express";
 import Folder from "../models/Folder.js";
-import { authenticate } from "../middleware/auth.js"; 
+import Image from "../models/Image.js";
+import cloudinary from "../config/cloudinary.js";
 
-const router = express.Router();
+// Get all folders of user
+export const getFolders = async (req, res) => {
+  try {
+    const folders = await Folder.find({ user: req.user._id }).sort({ createdAt: -1 });
+    res.status(200).json(folders);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch folders" });
+  }
+};
 
 // Create folder
-router.post("/", authenticate, async (req, res) => {
+export const createFolder = async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) return res.status(400).json({ message: "Folder name is required" });
-
-    const existing = await Folder.findOne({ name, user: req.user._id });
-    if (existing) return res.status(400).json({ message: "Folder already exists" });
-
     const folder = await Folder.create({ name, user: req.user._id });
     res.status(201).json(folder);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Folder creation failed" });
   }
-});
+};
 
-// Get all folders of user
-router.get("/", authenticate, async (req, res) => {
+// Delete folder + all images inside
+export const deleteFolder = async (req, res) => {
   try {
-    const folders = await Folder.find({ user: req.user._id }).sort({ createdAt: -1 });
-    res.json(folders);
+    const folderId = req.params.id;
+
+    // Find all images in this folder
+    const images = await Image.find({ folder: folderId, uploadedBy: req.user._id });
+
+    // Delete from Cloudinary
+    for (const img of images) {
+      if (img.public_id) await cloudinary.uploader.destroy(img.public_id);
+    }
+
+    // Delete images from DB
+    await Image.deleteMany({ folder: folderId, uploadedBy: req.user._id });
+
+    // Delete folder
+    await Folder.findByIdAndDelete(folderId);
+
+    res.status(200).json({ message: "Folder and its images deleted successfully" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Failed to delete folder" });
   }
-});
-
-
-router.delete("/:id", authenticate, async (req, res) => {
-  try {
-    const folder = await Folder.findById(req.params.id);
-
-    if (!folder) {
-      return res.status(404).json({ message: "Folder not found" });
-    }
-
-    // Only owner can delete folder
-    if (folder.user.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Not authorized" });
-    }
-
-    await Folder.findByIdAndDelete(req.params.id);
-
-    res.json({ message: "Folder deleted successfully" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-export default router;
+};
