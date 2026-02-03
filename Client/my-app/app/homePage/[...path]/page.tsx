@@ -30,10 +30,9 @@ export default function DynamicFolderPage() {
 
         const folderId = res.data.folderId;
 
-        const imgRes = await axios.get(
-          `${API_URL}/api/images?folderId=${folderId}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const imgRes = await axios.get(`${API_URL}/api/images?${folderId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         setImages(imgRes.data);
         setBreadcrumb(res.data.fullPath);

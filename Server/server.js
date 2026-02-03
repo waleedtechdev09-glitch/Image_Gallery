@@ -26,6 +26,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/images", imageRoutes);
 app.use("/api/folders", folderRoutes);
 
+
+
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
