@@ -18,7 +18,8 @@ import {
   getFolders, 
   createFolder, 
   deleteFolder,
-  getFolderPath 
+  getFolderPath, 
+  resolveFolderPath
 } from "../controllers/folders.js";
 
 import { protect } from "../middleware/authMiddleware.js";
@@ -31,6 +32,7 @@ router.get("/", getFolders);
 router.post("/", createFolder);
 router.get("/path/:id", getFolderPath);
 router.delete("/:id", deleteFolder);
+router.post("/resolve-path", resolveFolderPath);
 
 
 

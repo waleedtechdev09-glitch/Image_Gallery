@@ -165,7 +165,7 @@ const SignUpPage = () => {
         {/* RIGHT SIDE IMAGE */}
         <div className="w-full md:w-1/2 flex justify-center items-center p-4 md:p-6">
           <Image
-            src="/illustration.jpg"
+            src="/Signup.jpg"
             alt="Sign Up Image"
             width={500}
             height={500}
