@@ -15,9 +15,9 @@ export const getFolders = async (req, res) => {
   }
 };
 
-/**
- * Get full path of a folder (e.g., parent/child/grandchild)
- */
+
+  // Get full path of a folder (e.g., parent/child/grandchild)
+ 
 export const getFolderPath = async (req, res) => {
   try {
     const { id } = req.params;
@@ -44,9 +44,9 @@ export const getFolderPath = async (req, res) => {
   }
 };
 
-/**
- * Create a folder (duplicates allowed)
- */
+
+  // Create a folder (duplicates allowed)
+
 export const createFolder = async (req, res) => {
   try {
     const { name, parentId } = req.body;
@@ -65,9 +65,9 @@ export const createFolder = async (req, res) => {
   }
 };
 
-/**
- * Delete folder and all images inside
- */
+
+  // Delete folder and all images inside
+ 
 export const deleteFolder = async (req, res) => {
   try {
     const folderId = req.params.id;
