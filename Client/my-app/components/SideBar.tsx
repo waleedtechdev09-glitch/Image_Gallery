@@ -1,15 +1,20 @@
 "use client";
 
 import { Button } from "./ui/button";
-import { Home, ImageIcon, Settings, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import axios from "axios";
 import { getToken } from "../utils/auth";
+import FolderTree from "./FolderTree";
+
+interface Folder {
+  _id: string;
+  name: string;
+  parent?: string | null;
+}
 
 interface SidebarProps {
-  folders: { _id: string; name: string }[];
-  setFolders: React.Dispatch<
-    React.SetStateAction<{ _id: string; name: string }[]>
-  >;
+  folders: Folder[];
+  setFolders: React.Dispatch<React.SetStateAction<Folder[]>>;
   setActiveView: (view: "dashboard" | "images" | "settings") => void;
   fetchImages: (folderId?: string | null) => Promise<void>;
   selectedFolder: string | null;
@@ -27,20 +32,24 @@ const SideBar = ({
   const API_URL = "http://localhost:5000";
   const token = getToken();
 
-  // ------------------ Add folder ------------------
   const handleAddFolder = async () => {
     const name = prompt("Enter folder name:");
     if (!name || !token) return;
+
     try {
       const res = await axios.post(
         `${API_URL}/api/folders`,
-        { name },
+        {
+          name,
+          parentId: selectedFolder || null,
+        },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
       setFolders((prev) => [...prev, res.data]);
       setSelectedFolder(res.data._id);
       setActiveView("images");
+
       await fetchImages(res.data._id);
     } catch (err) {
       console.error(err);
@@ -48,98 +57,67 @@ const SideBar = ({
     }
   };
 
-  // ------------------ Delete folder ------------------
-  const handleDeleteFolder = async (id: string) => {
-    if (!token) return;
+  const handleDeleteFolder = async () => {
+    if (!selectedFolder || !token) return;
+
     if (!window.confirm("Delete this folder and all its images?")) return;
+
     try {
-      await axios.delete(`${API_URL}/api/folders/${id}`, {
+      await axios.delete(`${API_URL}/api/folders/${selectedFolder}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setFolders((prev) => prev.filter((f) => f._id !== id));
+      setFolders((prev) => prev.filter((f) => f._id !== selectedFolder));
 
-      if (selectedFolder === id) {
-        setSelectedFolder(null);
-        setActiveView("dashboard");
-        await fetchImages(null);
-      } else {
-        await fetchImages(selectedFolder);
-      }
+      setSelectedFolder(null);
+      setActiveView("dashboard");
+
+      await fetchImages(null);
     } catch (err) {
       console.error(err);
       alert("Folder deletion failed");
     }
   };
 
-  // ------------------ Select folder ------------------
   const handleSelectFolder = async (id: string) => {
     setSelectedFolder(id);
     setActiveView("images");
     await fetchImages(id);
   };
 
-  return (
-    <aside className="w-64 bg-white shadow-md p-6 hidden md:flex flex-col h-screen sticky top-0">
-      <h2 className="text-2xl font-bold mb-4">Library System</h2>
+  const rootFolders = folders.filter((f) => !f.parent);
 
-      <Button
-        onClick={handleAddFolder}
-        className="flex items-center gap-2 bg-green-500 text-white mb-4 cursor-pointer"
-      >
+  return (
+    <aside className="w-72 bg-white shadow-md p-4 flex flex-col h-screen overflow-y-auto">
+      <h2 className="text-xl font-bold mb-4">Library System</h2>
+
+      <Button onClick={handleAddFolder} className="mb-3">
         <Plus size={16} /> New Folder
       </Button>
 
-      <ul className="flex flex-col gap-1 mb-6">
-        {folders.map((f) => (
-          <li
-            key={f._id}
-            className="flex justify-between items-center px-2 py-1 rounded hover:bg-gray-100"
-          >
-            <span
-              className={`cursor-pointer ${selectedFolder === f._id ? "font-semibold" : ""}`}
-              onClick={() => handleSelectFolder(f._id)}
-            >
-              {f.name}
-            </span>
-            <button
-              onClick={() => handleDeleteFolder(f._id)}
-              className="text-red-500 hover:text-red-700 cursor-pointer"
-            >
-              <Trash2 size={16} />
-            </button>
-          </li>
+      {selectedFolder && (
+        <Button variant="outline" className="mb-3" onClick={handleDeleteFolder}>
+          <Trash2 size={16} /> Delete Selected
+        </Button>
+      )}
+
+      <div className="border rounded p-2 overflow-y-auto">
+        {rootFolders.length === 0 && (
+          <p className="text-gray-500 text-sm">No folders created</p>
+        )}
+
+        {rootFolders.map((folder) => (
+          <FolderTree
+            key={folder._id}
+            folder={folder}
+            allFolders={folders}
+            selectedFolder={selectedFolder}
+            onSelect={handleSelectFolder}
+          />
         ))}
-      </ul>
+      </div>
 
-      <nav className="flex flex-col gap-3 mb-auto">
-        <Button
-          variant="ghost"
-          className="justify-start cursor-pointer"
-          onClick={() => setActiveView("dashboard")}
-        >
-          <Home size={18} /> Dashboard
-        </Button>
-        <Button
-          variant="ghost"
-          className="justify-start cursor-pointer"
-          onClick={async () => {
-            setActiveView("images");
-            await fetchImages(selectedFolder);
-          }}
-        >
-          <ImageIcon size={18} /> My Images
-        </Button>
-        <Button
-          variant="ghost"
-          className="justify-start cursor-pointer"
-          onClick={() => setActiveView("settings")}
-        >
-          <Settings size={18} /> Settings
-        </Button>
-      </nav>
-
-      <div className="mt-auto pt-6 border-t border-gray-200 text-sm text-gray-500">
+      <div className="mt-auto text-xs text-gray-500 pt-4">
         &copy; 2026 Library System
       </div>
     </aside>

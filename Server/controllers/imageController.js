@@ -2,15 +2,40 @@ import Image from "../models/Image.js";
 import cloudinary from "../config/cloudinary.js";
 
 // Upload image to specific folder
+// export const uploadImage = async (req, res) => {
+//   try {
+//     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+//     const folderId = req.body.folderId || null;
+
+//     // Upload to Cloudinary
+//     const result = await cloudinary.uploader.upload(req.file.path, {
+//       folder: folderId ? folderId : undefined, // optional folder
+//     });
+
+//     const newImage = await Image.create({
+//       uploadedBy: req.user._id,
+//       url: result.secure_url,
+//       public_id: result.public_id,
+//       folder: folderId,
+//     });
+
+//     res.status(201).json(newImage);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Image upload failed" });
+//   }
+// };
+
 export const uploadImage = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    if (!req.file)
+      return res.status(400).json({ message: "No file uploaded" });
 
     const folderId = req.body.folderId || null;
 
-    // Upload to Cloudinary
     const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: folderId ? folderId : undefined, // optional folder
+      folder: folderId || "root",
     });
 
     const newImage = await Image.create({
@@ -26,6 +51,7 @@ export const uploadImage = async (req, res) => {
     res.status(500).json({ message: "Image upload failed" });
   }
 };
+
 
 // Get images (optionally filter by folder)
 export const getImages = async (req, res) => {
