@@ -1,38 +1,67 @@
 "use client";
 
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { removeToken } from "@/utils/auth";
+import { getToken, removeToken } from "@/utils/auth";
 import SideBar from "@/components/SideBar";
 import NextImage from "next/image";
 import { Button } from "@/components/ui/button";
 import { LogOut, Trash2 } from "lucide-react";
-import { useHomeController } from "@/hooks/useHomeController";
+
+import {
+  loadFolders,
+  loadImages,
+  loadBreadcrumb,
+  handleBreadcrumbClickController,
+  handleUploadController,
+  handleDeleteController,
+} from "../controllers/homeController";
+
+interface UploadedImage {
+  _id: string;
+  url: string;
+}
+
+interface Folder {
+  _id: string;
+  name: string;
+  parent?: string | null;
+}
 
 const HomePage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const folderIdFromUrl = searchParams.get("folderId");
 
-  const {
-    token,
-    fileInputRef,
-    folders,
-    setFolders,
-    images,
-    setImages,
-    selectedFolder,
-    setSelectedFolder,
-    breadcrumb,
-    imagesLoading,
-    uploading,
-    setUploading,
-    deletingImages,
-    setDeletingImages,
-    refreshImages,
-    handleBreadcrumbClickController,
-    handleUploadController,
-    handleDeleteController,
-  } = useHomeController(folderIdFromUrl);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [images, setImages] = useState<UploadedImage[]>([]);
+  const [selectedFolder, setSelectedFolderState] = useState<string | null>(
+    folderIdFromUrl,
+  );
+  const [breadcrumb, setBreadcrumb] = useState<string>("");
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deletingImages, setDeletingImages] = useState<string[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const token = getToken();
+
+  // Handle folder selection
+  const handleSelectFolder = (id: string | null) => {
+    setSelectedFolderState(id);
+    router.replace(id ? `/homePage?folderId=${id}` : `/homePage`);
+  };
+
+  // Load folders, images, breadcrumb
+  useEffect(() => {
+    const load = async () => {
+      if (!token) return;
+      await loadFolders(token, setFolders);
+      await loadImages(token, selectedFolder, setImages, setImagesLoading);
+      await loadBreadcrumb(token, selectedFolder, setBreadcrumb);
+    };
+    load();
+  }, [selectedFolder, token]);
 
   const handleLogout = () => {
     removeToken();
@@ -41,14 +70,18 @@ const HomePage = () => {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* Sidebar */}
       <SideBar
         folders={folders}
         setFolders={setFolders}
-        fetchImages={refreshImages}
+        fetchImages={() =>
+          loadImages(token!, selectedFolder, setImages, setImagesLoading)
+        }
         selectedFolder={selectedFolder}
-        setSelectedFolder={setSelectedFolder}
+        setSelectedFolder={handleSelectFolder}
       />
 
+      {/* Main Content */}
       <main className="flex-1 p-6 overflow-y-auto">
         {/* Breadcrumb */}
         {breadcrumb && (
@@ -57,7 +90,6 @@ const HomePage = () => {
               (name, idx, arr) => {
                 const isLast = idx === arr.length - 1;
                 const pathArray = arr.slice(2, idx + 1);
-
                 return (
                   <span key={idx} className="flex items-center">
                     {idx !== 0 && <span className="text-gray-300 mx-1">/</span>}
@@ -72,7 +104,7 @@ const HomePage = () => {
                         handleBreadcrumbClickController(
                           token!,
                           pathArray,
-                          setSelectedFolder,
+                          handleSelectFolder,
                         )
                       }
                     >
@@ -87,12 +119,16 @@ const HomePage = () => {
 
         {/* Logout */}
         <div className="flex justify-end mb-4">
-          <Button variant="outline" onClick={handleLogout}>
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="cursor-pointer"
+          >
             <LogOut size={16} /> Logout
           </Button>
         </div>
 
-        {/* Upload */}
+        {/* Upload Area */}
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
@@ -102,7 +138,8 @@ const HomePage = () => {
               e.dataTransfer.files,
               selectedFolder,
               setUploading,
-              refreshImages,
+              () =>
+                loadImages(token!, selectedFolder, setImages, setImagesLoading),
             );
           }}
           onClick={() => fileInputRef.current?.click()}
@@ -121,24 +158,43 @@ const HomePage = () => {
                 e.target.files!,
                 selectedFolder,
                 setUploading,
-                refreshImages,
+                () =>
+                  loadImages(
+                    token!,
+                    selectedFolder,
+                    setImages,
+                    setImagesLoading,
+                  ),
               )
             }
             className="hidden"
           />
         </div>
 
-        {/* Images */}
+        {/* SUBFOLDER AND IMAGES */}
         {imagesLoading ? (
           <div className="text-center py-20 text-gray-400">
-            Loading images...
-          </div>
-        ) : images.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            No images uploaded yet
+            Loading content...
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {/* SUBFOLDER */}
+            {folders
+              .filter((f) => f.parent === selectedFolder)
+              .map((subfolder) => (
+                <div
+                  key={subfolder._id}
+                  onClick={() => handleSelectFolder(subfolder._id)}
+                  className="relative w-full h-52 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition"
+                >
+                  <div className="text-orange-600 font-bold text-lg">
+                    📁 {subfolder.name}
+                  </div>
+                  <div className="text-gray-400 text-sm mt-1">Folder</div>
+                </div>
+              ))}
+
+            {/* Images */}
             {images.map((img) => {
               const isDeleting = deletingImages.includes(img._id);
               return (
