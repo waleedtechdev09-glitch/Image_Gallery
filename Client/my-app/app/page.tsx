@@ -1,59 +1,29 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { setToken, isLoggedIn } from "../utils/auth";
+import { useLoginController } from "../hooks/useLoginController";
+import Link from "next/link";
 import Image from "next/image";
 import { Mail, Lock } from "lucide-react";
-import Link from "next/link";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import axios from "axios";
-import { setToken, isLoggedIn } from "../utils/auth";
 
 const LoginPage = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (isLoggedIn()) {
+  const { formData, loading, error, handleChange, handleSubmit } =
+    useLoginController((token: string) => {
+      setToken(token);
       router.push("/homePage");
-    }
+    });
+
+  useEffect(() => {
+    if (isLoggedIn()) router.push("/homePage");
   }, [router]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    try {
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/login",
-        formData,
-      );
-
-      console.log("LOGIN RESPONSE:", res.data);
-
-      if (res.data.token) {
-        setToken(res.data.token);
-        router.push("/homePage");
-      } else {
-        setError("Token not returned from backend");
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="relative min-h-screen bg-black px-4 sm:px-6 md:px-12 lg:px-24 flex items-center justify-center">
+    <div className="relative min-h-screen bg-black flex items-center justify-center px-4 sm:px-6 md:px-12 lg:px-24">
+      {/* Loading overlay */}
       {loading && (
         <div className="absolute inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-opacity-50 backdrop-blur-sm"></div>
@@ -71,7 +41,7 @@ const LoginPage = () => {
           loading ? "blur-sm" : ""
         }`}
       >
-        {/* LEFT SIDE */}
+        {/* LEFT SIDE FORM */}
         <div className="w-full lg:w-1/2 p-6 sm:p-8 md:p-12 flex flex-col justify-center">
           <div className="bg-white w-20 h-20 sm:w-24 sm:h-24 lg:w-32 lg:h-32 rounded-full flex justify-center items-center mx-auto lg:mx-0">
             <Image src="/logo.png" alt="Logo" width={80} height={80} />
@@ -130,17 +100,15 @@ const LoginPage = () => {
             </button>
           </form>
 
-          <div className="mt-3 mb-4 text-center lg:text-left">
-            <p className="text-gray-400 text-sm">
-              Haven&apos;t an account?{" "}
-              <Link href="/signup" className="text-blue-500 hover:underline">
-                Sign Up
-              </Link>
-            </p>
-          </div>
+          <p className="text-gray-400 text-sm mt-3 text-center lg:text-left">
+            Haven&apos;t an account?{" "}
+            <Link href="/signup" className="text-blue-500 hover:underline">
+              Sign Up
+            </Link>
+          </p>
         </div>
 
-        {/* RIGHT IMAGE */}
+        {/* RIGHT SIDE IMAGE */}
         <div className="w-full lg:w-1/2 flex justify-center items-center">
           <Image
             src="/Login.jpg"

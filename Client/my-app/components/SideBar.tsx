@@ -2,10 +2,13 @@
 
 import { Button } from "./ui/button";
 import { Plus, Trash2 } from "lucide-react";
-import axios from "axios";
-import { getToken } from "@/utils/auth";
 import FolderTree from "./FolderTree";
 import Link from "next/link";
+
+import {
+  handleAddFolderController,
+  handleDeleteFolderController,
+} from "../controllers/folderController";
 
 interface Folder {
   _id: string;
@@ -28,49 +31,6 @@ const SideBar = ({
   selectedFolder,
   setSelectedFolder,
 }: SidebarProps) => {
-  const API_URL = "http://localhost:5000";
-  const token = getToken();
-
-  const handleAddFolder = async () => {
-    const name = prompt("Enter folder name:");
-    if (!name) return alert("Folder name cannot be empty!");
-    if (!token) return alert("Authentication failed");
-
-    try {
-      const res = await axios.post(
-        `${API_URL}/api/folders`,
-        { name, parentId: selectedFolder || null },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-
-      setFolders((prev) => [...prev, res.data]);
-      setSelectedFolder(res.data._id);
-      await fetchImages(res.data._id);
-      alert(`Folder "${name}" created!`);
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.response?.data?.message || "Failed to create folder");
-    }
-  };
-
-  const handleDeleteFolder = async () => {
-    if (!selectedFolder) return alert("Select a folder first");
-    if (!window.confirm("Delete this folder and its images?")) return;
-
-    try {
-      await axios.delete(`${API_URL}/api/folders/${selectedFolder}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setFolders((prev) => prev.filter((f) => f._id !== selectedFolder));
-      setSelectedFolder(null);
-      await fetchImages(null);
-      alert("Folder deleted!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete folder");
-    }
-  };
-
   const rootFolders = folders.filter((f) => !f.parent);
 
   return (
@@ -80,7 +40,14 @@ const SideBar = ({
       </h2>
 
       <Button
-        onClick={handleAddFolder}
+        onClick={() =>
+          handleAddFolderController(
+            selectedFolder,
+            setFolders,
+            setSelectedFolder,
+            fetchImages,
+          )
+        }
         className="mb-3 w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white"
       >
         <Plus size={18} /> New Folder
@@ -89,7 +56,14 @@ const SideBar = ({
       {selectedFolder && (
         <Button
           variant="outline"
-          onClick={handleDeleteFolder}
+          onClick={() =>
+            handleDeleteFolderController(
+              selectedFolder,
+              setFolders,
+              setSelectedFolder,
+              fetchImages,
+            )
+          }
           className="mb-4 w-full flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white"
         >
           <Trash2 size={18} /> Delete Folder

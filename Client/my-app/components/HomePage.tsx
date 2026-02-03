@@ -1,179 +1,54 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import axios from "axios";
-import { getToken, removeToken } from "@/utils/auth";
+import { removeToken } from "@/utils/auth";
 import SideBar from "@/components/SideBar";
 import NextImage from "next/image";
 import { Button } from "@/components/ui/button";
 import { LogOut, Trash2 } from "lucide-react";
-
-interface UploadedImage {
-  _id: string;
-  url: string;
-}
-
-interface Folder {
-  _id: string;
-  name: string;
-  parent?: string | null;
-}
+import { useHomeController } from "@/hooks/useHomeController";
 
 const HomePage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const folderIdFromUrl = searchParams.get("folderId");
 
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [images, setImages] = useState<UploadedImage[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(
-    folderIdFromUrl,
-  );
-  const [breadcrumb, setBreadcrumb] = useState<string>("");
-  const [imagesLoading, setImagesLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  // Track images currently being deleted
-  const [deletingImages, setDeletingImages] = useState<string[]>([]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const API_URL = "http://localhost:5000";
-  const token = getToken();
-
-  const fetchFolders = async () => {
-    if (!token) return;
-    try {
-      const res = await axios.get(`${API_URL}/api/folders`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setFolders(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchImages = async (folderId: string | null = selectedFolder) => {
-    setImagesLoading(true);
-    try {
-      const url = folderId
-        ? `${API_URL}/api/images?folderId=${folderId}`
-        : `${API_URL}/api/images`;
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setImages(res.data);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to load images");
-    } finally {
-      setImagesLoading(false);
-    }
-  };
-
-  const fetchBreadcrumb = async (folderId: string | null) => {
-    if (!folderId) {
-      setBreadcrumb("");
-      return;
-    }
-    try {
-      const res = await axios.get(`${API_URL}/api/folders/path/${folderId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setBreadcrumb(res.data.path);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    const load = async () => {
-      await fetchFolders();
-      await fetchImages(selectedFolder);
-      await fetchBreadcrumb(selectedFolder);
-      router.replace(
-        selectedFolder ? `/homePage?folderId=${selectedFolder}` : `/homePage`,
-      );
-    };
-    load();
-  }, [selectedFolder]);
+  const {
+    token,
+    fileInputRef,
+    folders,
+    setFolders,
+    images,
+    setImages,
+    selectedFolder,
+    setSelectedFolder,
+    breadcrumb,
+    imagesLoading,
+    uploading,
+    setUploading,
+    deletingImages,
+    setDeletingImages,
+    refreshImages,
+    handleBreadcrumbClickController,
+    handleUploadController,
+    handleDeleteController,
+  } = useHomeController(folderIdFromUrl);
 
   const handleLogout = () => {
     removeToken();
     router.push("/");
   };
 
-  const handleUpload = async (files: FileList | File[]) => {
-    if (!token) return alert("Not authenticated");
-    if (!files || files.length === 0) return;
-
-    const fileArray = Array.from(files);
-    const formData = new FormData();
-    fileArray.forEach((file) => formData.append("images", file));
-    if (selectedFolder) formData.append("folderId", selectedFolder);
-
-    try {
-      setUploading(true);
-      await axios.post(`${API_URL}/api/images/upload-multiple`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchImages(selectedFolder);
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.response?.data?.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // ---------------- Delete image with loading ----------------
-  const handleDeleteImage = async (id: string) => {
-    if (!window.confirm("Delete this image?")) return;
-
-    try {
-      setDeletingImages((prev) => [...prev, id]);
-      await axios.delete(`${API_URL}/api/images/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setImages((prev) => prev.filter((img) => img._id !== id));
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete image");
-    } finally {
-      setDeletingImages((prev) => prev.filter((imgId) => imgId !== id));
-    }
-  };
-
-  const handleBreadcrumbClick = async (pathArray: string[]) => {
-    if (pathArray.length === 0) {
-      setSelectedFolder(null);
-      return;
-    }
-    try {
-      const res = await axios.post(
-        `${API_URL}/api/folders/resolve-path`,
-        { path: pathArray },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      setSelectedFolder(res.data.folderId);
-    } catch (err) {
-      console.error("Failed to navigate breadcrumb", err);
-    }
-  };
-
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
       <SideBar
         folders={folders}
         setFolders={setFolders}
-        fetchImages={fetchImages}
+        fetchImages={refreshImages}
         selectedFolder={selectedFolder}
         setSelectedFolder={setSelectedFolder}
       />
 
-      {/* Main Content */}
       <main className="flex-1 p-6 overflow-y-auto">
         {/* Breadcrumb */}
         {breadcrumb && (
@@ -181,7 +56,7 @@ const HomePage = () => {
             {["home", "folders", ...breadcrumb.split("/")].map(
               (name, idx, arr) => {
                 const isLast = idx === arr.length - 1;
-                const pathArray = arr.slice(2, idx + 1); // skip home/folders
+                const pathArray = arr.slice(2, idx + 1);
 
                 return (
                   <span key={idx} className="flex items-center">
@@ -193,7 +68,12 @@ const HomePage = () => {
                           : "text-gray-500 hover:text-blue-600 cursor-pointer"
                       }`}
                       onClick={() =>
-                        !isLast && handleBreadcrumbClick(pathArray)
+                        !isLast &&
+                        handleBreadcrumbClickController(
+                          token!,
+                          pathArray,
+                          setSelectedFolder,
+                        )
                       }
                     >
                       {name}
@@ -212,12 +92,18 @@ const HomePage = () => {
           </Button>
         </div>
 
-        {/* Drag & Drop / Click Upload */}
+        {/* Upload */}
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            handleUpload(e.dataTransfer.files);
+            handleUploadController(
+              token!,
+              e.dataTransfer.files,
+              selectedFolder,
+              setUploading,
+              refreshImages,
+            );
           }}
           onClick={() => fileInputRef.current?.click()}
           className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center text-gray-400 hover:border-blue-400 hover:text-blue-600 transition-colors cursor-pointer mb-6"
@@ -229,12 +115,20 @@ const HomePage = () => {
             type="file"
             multiple
             ref={fileInputRef}
-            onChange={(e) => handleUpload(e.target.files!)}
+            onChange={(e) =>
+              handleUploadController(
+                token!,
+                e.target.files!,
+                selectedFolder,
+                setUploading,
+                refreshImages,
+              )
+            }
             className="hidden"
           />
         </div>
 
-        {/* Images Grid */}
+        {/* Images */}
         {imagesLoading ? (
           <div className="text-center py-20 text-gray-400">
             Loading images...
@@ -261,9 +155,16 @@ const HomePage = () => {
                     }`}
                   />
 
-                  {/* Delete Button */}
+                  {/* Delete */}
                   <button
-                    onClick={() => handleDeleteImage(img._id)}
+                    onClick={() =>
+                      handleDeleteController(
+                        token!,
+                        img._id,
+                        setDeletingImages,
+                        setImages,
+                      )
+                    }
                     disabled={isDeleting}
                     className={`absolute top-2 right-2 px-2 py-1 rounded text-white transition-colors ${
                       isDeleting
@@ -278,7 +179,6 @@ const HomePage = () => {
                     )}
                   </button>
 
-                  {/* Optional overlay when deleting */}
                   {isDeleting && (
                     <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center rounded-lg">
                       <span className="text-white text-sm font-medium">
