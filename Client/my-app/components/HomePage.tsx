@@ -42,6 +42,7 @@ const HomePage = () => {
   const [imagesLoading, setImagesLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingImages, setDeletingImages] = useState<string[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const token = getToken();
@@ -66,6 +67,22 @@ const HomePage = () => {
   const handleLogout = () => {
     removeToken();
     router.push("/");
+  };
+
+  const handleDownload = async (url: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = url.split("/").pop() || "image.jpg";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      alert("Download failed");
+    }
   };
 
   return (
@@ -206,7 +223,8 @@ const HomePage = () => {
                     src={img.url}
                     alt="img"
                     fill
-                    className={`object-cover transition-transform duration-300 ${
+                    onClick={() => setPreviewImage(img.url)}
+                    className={`object-cover transition-transform duration-300 cursor-pointer ${
                       !isDeleting && "group-hover:scale-105"
                     }`}
                   />
@@ -245,6 +263,33 @@ const HomePage = () => {
                 </div>
               );
             })}
+          </div>
+        )}
+        {previewImage && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+            <div className="relative bg-white p-4 rounded-lg max-w-4xl w-full mx-4">
+              <img
+                src={previewImage}
+                alt="preview"
+                className="w-full max-h-[80vh] object-contain rounded"
+              />
+
+              <div className="flex justify-between mt-4">
+                <Button
+                  onClick={() => handleDownload(previewImage)}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Download
+                </Button>
+
+                <Button
+                  onClick={() => setPreviewImage(null)}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </main>
