@@ -5,7 +5,11 @@ import {
   resolveFolderPathAPI,
   uploadImagesAPI,
   deleteImageAPI,
+  resizeImageAPI,
 } from "../services/apiService";
+import Swal from "sweetalert2";
+
+// ... (Baaki functions same rahenge)
 
 export const loadFolders = async (token: string, setFolders: Function) => {
   try {
@@ -92,15 +96,62 @@ export const handleDeleteController = async (
   setDeletingImages: Function,
   setImages: Function,
 ) => {
-  if (!window.confirm("Delete this image?")) return;
+  const result = await Swal.fire({
+    title: "Delete this image?",
+    text: "This action cannot be undone!",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#ef4444",
+    confirmButtonText: "Yes, delete it!",
+  });
+
+  if (!result.isConfirmed) return;
+
   try {
     setDeletingImages((prev: string[]) => [...prev, id]);
     await deleteImageAPI(token, id);
     setImages((prev: any[]) => prev.filter((img) => img._id !== id));
+    Swal.fire("Deleted!", "Your image has been deleted.", "success");
   } catch (err) {
     console.error(err);
-    alert("Failed to delete image");
+    Swal.fire("Error", "Failed to delete image", "error");
   } finally {
     setDeletingImages((prev: string[]) => prev.filter((imgId) => imgId !== id));
+  }
+};
+
+// ✨ UPDATED: MANUAL RESIZE HANDLER WITH SIZE PARAMETER
+export const handleResizeController = async (
+  token: string,
+  id: string,
+  targetSize: number, // 👈 Receiving size from HomePage
+  setGlobalLoading: Function,
+  refreshImages: Function,
+) => {
+  try {
+    setGlobalLoading(true);
+
+    // API call mein size pass kar rahe hain
+    await resizeImageAPI(token, id, targetSize);
+
+    await refreshImages();
+
+    Swal.fire({
+      title: "Resized!",
+      text: `Thumbnail (${targetSize}px) generated successfully.`,
+      icon: "success",
+      timer: 2000,
+      showConfirmButton: false,
+    });
+  } catch (err: any) {
+    console.error("Resize Error:", err);
+    Swal.fire(
+      "Error",
+      err.response?.data?.message ||
+        "Manual resize failed. Check if resizer service is active.",
+      "error",
+    );
+  } finally {
+    setGlobalLoading(false);
   }
 };

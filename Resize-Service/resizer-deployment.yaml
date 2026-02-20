@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-resizer-deployment
+spec:
+  replicas: 2 # Do instances chalenge taake agar ek down ho to dusra kaam kare
+  selector:
+    matchLabels:
+      app: image-resizer
+  template:
+    metadata:
+      labels:
+        app: image-resizer
+    spec:
+      containers:
+        - name: image-resizer
+          image: public.ecr.aws/j8p6d9w0/resize-images
+          ports:
+            - containerPort: 5001
+          env:
+            - name: CLOUDINARY_CLOUD_NAME
+              value: "dxtthl5w9"
+            - name: CLOUDINARY_API_KEY
+              value: "723935113188218"
+            - name: CLOUDINARY_API_SECRET
+              value: "NIyadpMagp0d_50JUmbFM9EIpDw"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-resizer-service
+spec:
+  type: LoadBalancer # Ye AWS se automatic Public IP/DNS le lega
+  selector:
+    app: image-resizer
+  ports:
+    - protocol: TCP
+      port: 80 # Bahar se log port 80 pe hit karenge
+      targetPort: 5001 # Container ke andar port 3001 chal raha hai

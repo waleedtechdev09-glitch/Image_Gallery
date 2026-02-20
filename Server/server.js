@@ -1,7 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import cors from 'cors'
+import cors from 'cors';
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import imageRoutes from "./routes/imageRoutes.js";
@@ -12,10 +12,15 @@ const app = express();
 
 // Middleware
 app.use(express.json());
+
+// CORS Update: Ab ye localhost ke bajaye aapke AWS Frontend URL ko allow karega
 app.use(cors({
-    origin: "http://localhost:3000",
+    origin: [
+      "http://a7975ea6e192a494cb4062778c5d0e6b-1315247729.ap-south-1.elb.amazonaws.com",
+      "http://localhost:3000" // Development ke liye localhost bhi rakha hai
+    ],
     credentials: true,
-  }))
+}));
 
 // Test root route
 app.get("/", (req, res) => res.send("Library System API is Running"));
@@ -25,8 +30,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/images", imageRoutes);
 app.use("/api/folders", folderRoutes);
-
-
 
 // Connect to MongoDB
 mongoose

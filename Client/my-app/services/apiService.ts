@@ -1,8 +1,10 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:5000";
+const API_URL =
+  "http://a8e4f52fd8989452b84e82a64e3bb256-254123936.ap-south-1.elb.amazonaws.com";
 
 export const getToken = () => localStorage.getItem("token");
+
 // FOLDER FETCHING
 export const fetchFoldersAPI = async (token: string) => {
   const res = await axios.get(`${API_URL}/api/folders`, {
@@ -10,6 +12,7 @@ export const fetchFoldersAPI = async (token: string) => {
   });
   return res.data;
 };
+
 // IMAGE FETCHING
 export const fetchImagesAPI = async (
   token: string,
@@ -23,6 +26,7 @@ export const fetchImagesAPI = async (
   });
   return res.data;
 };
+
 // BREADCRUMB FETCHING
 export const fetchBreadcrumbAPI = async (token: string, folderId: string) => {
   const res = await axios.get(`${API_URL}/api/folders/path/${folderId}`, {
@@ -30,6 +34,7 @@ export const fetchBreadcrumbAPI = async (token: string, folderId: string) => {
   });
   return res.data.path;
 };
+
 // RESOLVED FOLDER PATH
 export const resolveFolderPathAPI = async (
   token: string,
@@ -44,6 +49,7 @@ export const resolveFolderPathAPI = async (
   );
   return res.data.folderId;
 };
+
 // UPLOAD IMAGE
 export const uploadImagesAPI = async (
   token: string,
@@ -58,9 +64,26 @@ export const uploadImagesAPI = async (
     headers: { Authorization: `Bearer ${token}` },
   });
 };
+
 // DELETE IMAGE
 export const deleteImageAPI = async (token: string, id: string) => {
   await axios.delete(`${API_URL}/api/images/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+};
+
+//NEW: MANUAL RESIZE IMAGE API
+export const resizeImageAPI = async (
+  token: string,
+  id: string,
+  targetSize: number,
+) => {
+  const res = await axios.post(
+    `${API_URL}/api/images/resize/${id}`,
+    { targetSize },
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  return res.data;
 };

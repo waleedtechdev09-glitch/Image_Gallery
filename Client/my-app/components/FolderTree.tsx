@@ -1,86 +1,19 @@
-// "use client";
-
-// import { ChevronDown, ChevronRight } from "lucide-react";
-// import { Folder } from "./SideBar";
-
-// interface FolderTreeProps {
-//   folder: Folder;
-//   allFolders: Folder[];
-//   selectedFolder: string | null;
-//   onSelect: (id: string | null) => void;
-//   expandedFolders: Set<string>;
-//   setExpandedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
-// }
-
-// const FolderTree = ({
-//   folder,
-//   allFolders,
-//   selectedFolder,
-//   onSelect,
-//   expandedFolders,
-//   setExpandedFolders,
-// }: FolderTreeProps) => {
-//   const childFolders = allFolders.filter((f) => f.parent === folder._id);
-//   const isOpen = expandedFolders.has(folder._id);
-
-//   const toggle = () => {
-//     const newSet = new Set(expandedFolders);
-//     if (isOpen) newSet.delete(folder._id);
-//     else newSet.add(folder._id);
-//     setExpandedFolders(newSet);
-//   };
-
-//   return (
-//     <div className="ml-2">
-//       <div
-//         className={`flex items-center justify-between p-1 cursor-pointer rounded hover:bg-orange-100 ${
-//           selectedFolder === folder._id ? "bg-orange-200 font-semibold" : ""
-//         }`}
-//       >
-//         <div className="flex items-center gap-1">
-//           {childFolders.length > 0 && (
-//             <span onClick={toggle}>
-//               {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-//             </span>
-//           )}
-//           <span onClick={() => onSelect(folder._id)}>{folder.name}</span>
-//         </div>
-//       </div>
-
-//       {isOpen &&
-//         childFolders.map((child) => (
-//           <FolderTree
-//             key={child._id}
-//             folder={child}
-//             allFolders={allFolders}
-//             selectedFolder={selectedFolder}
-//             onSelect={onSelect}
-//             expandedFolders={expandedFolders}
-//             setExpandedFolders={setExpandedFolders}
-//           />
-//         ))}
-//     </div>
-//   );
-// };
-
-// export default FolderTree;
-
 "use client";
 
-import { ChevronDown, ChevronRight } from "lucide-react";
-import React, { useState } from "react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
+import React, { useState, useEffect } from "react";
 
-interface Folder {
+interface FolderType {
   _id: string;
   name: string;
   parent?: string | null;
 }
 
 interface FolderTreeProps {
-  folder: Folder;
-  allFolders: Folder[];
+  folder: FolderType;
+  allFolders: FolderType[];
   selectedFolder: string | null;
-  expandedFolders: Set<string>;
+  expandedFolders: Set<string>; // Global expansion (URL/Breadcrumb se aati hai)
   onSelect: (id: string | null) => void;
 }
 
@@ -92,41 +25,87 @@ const FolderTree = ({
   onSelect,
 }: FolderTreeProps) => {
   const children = allFolders.filter((f) => f.parent === folder._id);
-  const isExpanded = expandedFolders.has(folder._id);
-  const [localExpanded, setLocalExpanded] = useState(false);
 
-  const toggle = () => setLocalExpanded((prev) => !prev);
+  // Local state for manual clicking
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Sync local state if global expandedFolders changes (e.g. breadcrumb click)
+  useEffect(() => {
+    if (expandedFolders.has(folder._id)) {
+      setIsOpen(true);
+    }
+  }, [expandedFolders, folder._id]);
+
+  const isSelected = selectedFolder === folder._id;
 
   return (
-    <div className="pl-2">
+    <div className="w-full">
       <div
-        className={`flex items-center justify-between p-1 cursor-pointer hover:bg-orange-50 rounded ${
-          selectedFolder === folder._id ? "bg-orange-100 font-semibold" : ""
-        }`}
-        onClick={() => {
+        className={`
+          group flex items-center gap-2 px-3 py-2 my-0.5 rounded-xl cursor-pointer transition-all duration-200
+          ${
+            isSelected
+              ? "bg-indigo-50 text-indigo-700 shadow-sm"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }
+        `}
+        onClick={(e) => {
           onSelect(folder._id);
-          toggle();
+          setIsOpen(!isOpen);
         }}
       >
-        <span>{folder.name}</span>
-        {children.length > 0 && (
-          <span className="text-gray-400 text-sm">
-            {isExpanded || localExpanded ? <ChevronDown /> : <ChevronRight />}
+        {/* Arrow Icon */}
+        <div className="w-4 h-4 flex items-center justify-center">
+          {children.length > 0 && (
+            <span className="text-slate-400 group-hover:text-indigo-500">
+              {isOpen ? (
+                <ChevronDown size={14} strokeWidth={3} />
+              ) : (
+                <ChevronRight size={14} strokeWidth={3} />
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* Folder Icon */}
+        <span
+          className={
+            isSelected
+              ? "text-indigo-600"
+              : "text-slate-400 group-hover:text-slate-500"
+          }
+        >
+          {isOpen ? <FolderOpen size={18} /> : <Folder size={18} />}
+        </span>
+
+        {/* Folder Name */}
+        <span className="text-sm font-medium truncate flex-1">
+          {folder.name}
+        </span>
+
+        {/* Badge for children count (Optional) */}
+        {children.length > 0 && !isOpen && (
+          <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-md font-bold">
+            {children.length}
           </span>
         )}
       </div>
 
-      {(isExpanded || localExpanded) &&
-        children.map((child) => (
-          <FolderTree
-            key={child._id}
-            folder={child}
-            allFolders={allFolders}
-            selectedFolder={selectedFolder}
-            expandedFolders={expandedFolders}
-            onSelect={onSelect}
-          />
-        ))}
+      {/* Recursive Children Rendering */}
+      {isOpen && children.length > 0 && (
+        <div className="ml-4 pl-2 border-l border-slate-200 mt-1 space-y-1">
+          {children.map((child) => (
+            <FolderTree
+              key={child._id}
+              folder={child}
+              allFolders={allFolders}
+              selectedFolder={selectedFolder}
+              expandedFolders={expandedFolders}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
