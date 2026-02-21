@@ -2,12 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
-    // ⚡ Next.js ko batana ke Cloudinary aur AWS domains safe hain
     remotePatterns: [
       {
-        protocol: "https", // Cloudinary hamesha https use karta hai
+        protocol: "https",
         hostname: "res.cloudinary.com",
-        pathname: "/**", // Saare paths allow karein
+        pathname: "/**",
       },
       {
         protocol: "http",
@@ -20,6 +19,11 @@ const nextConfig: NextConfig = {
         pathname: "/**",
       },
     ],
+  },
+  // ⚡ Next.js 15 ke liye ye dono settings try karein
+  devIndicators: {
+    appIsrStatus: false,
+    buildActivity: false, // Build activity indicator ko bhi off kar dein
   },
 };
 

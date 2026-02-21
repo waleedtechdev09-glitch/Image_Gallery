@@ -16,7 +16,7 @@ app.use(express.json());
 // CORS Update: Ab ye localhost ke bajaye aapke AWS Frontend URL ko allow karega
 app.use(cors({
     origin: [
-      "http://a7975ea6e192a494cb4062778c5d0e6b-1315247729.ap-south-1.elb.amazonaws.com",
+       "http://dlsystem.duckdns.org", // Aapka AWS Frontend URL;
       "http://localhost:3000" // Development ke liye localhost bhi rakha hai
     ],
     credentials: true,

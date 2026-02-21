@@ -41,8 +41,7 @@ const SideBar = ({
   setSelectedFolder,
   setGlobalLoading,
 }: SidebarProps) => {
-  const API_URL =
-    "http://a8e4f52fd8989452b84e82a64e3bb256-254123936.ap-south-1.elb.amazonaws.com";
+  const API_URL = "http://dlsystem.duckdns.org/api";
   const token = getToken();
 
   const [isCreating, setIsCreating] = useState(false);
@@ -79,7 +78,7 @@ const SideBar = ({
     setIsCreating(true);
     try {
       const res = await axios.post(
-        `${API_URL}/api/folders`,
+        `${API_URL}/folders`,
         { name: folderName, parentId: selectedFolder || null },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -112,7 +111,7 @@ const SideBar = ({
     if (result.isConfirmed) {
       try {
         setGlobalLoading(true);
-        await axios.delete(`${API_URL}/api/folders/${selectedFolder}`, {
+        await axios.delete(`${API_URL}/folders/${selectedFolder}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setFolders((prev) => prev.filter((f) => f._id !== selectedFolder));

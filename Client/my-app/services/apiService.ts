@@ -1,13 +1,12 @@
 import axios from "axios";
 
-const API_URL =
-  "http://a8e4f52fd8989452b84e82a64e3bb256-254123936.ap-south-1.elb.amazonaws.com";
+const API_URL = "http://dlsystem.duckdns.org/api";
 
 export const getToken = () => localStorage.getItem("token");
 
 // FOLDER FETCHING
 export const fetchFoldersAPI = async (token: string) => {
-  const res = await axios.get(`${API_URL}/api/folders`, {
+  const res = await axios.get(`${API_URL}/folders`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.data;
@@ -19,8 +18,8 @@ export const fetchImagesAPI = async (
   folderId?: string | null,
 ) => {
   const url = folderId
-    ? `${API_URL}/api/images?folderId=${folderId}`
-    : `${API_URL}/api/images`;
+    ? `${API_URL}/images?folderId=${folderId}`
+    : `${API_URL}/images`;
   const res = await axios.get(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -29,7 +28,7 @@ export const fetchImagesAPI = async (
 
 // BREADCRUMB FETCHING
 export const fetchBreadcrumbAPI = async (token: string, folderId: string) => {
-  const res = await axios.get(`${API_URL}/api/folders/path/${folderId}`, {
+  const res = await axios.get(`${API_URL}/folders/path/${folderId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.data.path;
@@ -41,7 +40,7 @@ export const resolveFolderPathAPI = async (
   pathArray: string[],
 ) => {
   const res = await axios.post(
-    `${API_URL}/api/folders/resolve-path`,
+    `${API_URL}/folders/resolve-path`,
     { path: pathArray },
     {
       headers: { Authorization: `Bearer ${token}` },
@@ -60,14 +59,14 @@ export const uploadImagesAPI = async (
   files.forEach((file) => formData.append("images", file));
   if (folderId) formData.append("folderId", folderId);
 
-  await axios.post(`${API_URL}/api/images/upload-multiple`, formData, {
+  await axios.post(`${API_URL}/images/upload-multiple`, formData, {
     headers: { Authorization: `Bearer ${token}` },
   });
 };
 
 // DELETE IMAGE
 export const deleteImageAPI = async (token: string, id: string) => {
-  await axios.delete(`${API_URL}/api/images/${id}`, {
+  await axios.delete(`${API_URL}/images/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 };
@@ -79,7 +78,7 @@ export const resizeImageAPI = async (
   targetSize: number,
 ) => {
   const res = await axios.post(
-    `${API_URL}/api/images/resize/${id}`,
+    `${API_URL}/images/resize/${id}`,
     { targetSize },
     {
       headers: { Authorization: `Bearer ${token}` },

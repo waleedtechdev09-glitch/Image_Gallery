@@ -31,7 +31,7 @@ kind: Service
 metadata:
   name: image-resizer-service
 spec:
-  type: LoadBalancer # Ye AWS se automatic Public IP/DNS le lega
+  type: ClusterIP # Ye AWS se automatic Public IP/DNS le lega
   selector:
     app: image-resizer
   ports:
