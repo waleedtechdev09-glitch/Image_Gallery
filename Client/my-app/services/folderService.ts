@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://dlsystem.duckdns.org/api";
+const API_URL = "http://media-lib.conn-api.com/api";
 
 export const getToken = () => localStorage.getItem("token");
 

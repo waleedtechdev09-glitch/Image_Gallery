@@ -1,12 +1,25 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: image-app-ingress
+  name: media-vault-alb-ingress
+  namespace: default
   annotations:
-    kubernetes.io/ingress.class: "nginx"
+    # ALB Setup
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # Is se AWS Controller ko pata chalta hai ke ye kis group ka hissa hai
+    alb.ingress.kubernetes.io/group.name: media-app-group
+
+    # Ports configuration
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+
+    # Traffic routing
+    kubernetes.io/ingress.class: alb
 spec:
+  ingressClassName: alb
   rules:
-    - host: dlsystem.duckdns.org
+    - host: media-lib.conn-api.com
       http:
         paths:
           - path: /api

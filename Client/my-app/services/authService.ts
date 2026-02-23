@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://dlsystem.duckdns.org/api/auth";
+const API_URL = "http://media-lib.conn-api.com/api/auth";
 // USER REGISTER
 export const registerUser = async (
   name: string,
