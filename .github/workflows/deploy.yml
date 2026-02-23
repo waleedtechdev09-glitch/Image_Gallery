@@ -3,7 +3,7 @@ name: Deploy Image_Gallery
 on:
   push:
     branches:
-      - main # Agar aapki branch ka naam master hai toh wo likhein
+      - main
 
 jobs:
   build-and-deploy:
@@ -33,13 +33,19 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
 
+      # --- YE STEP ZAROORI HAI ---
       - name: Update Kubeconfig
-        run: aws eks update-kubeconfig --name final-tier-cluster --region ap-south-1
+        run: |
+          aws eks update-kubeconfig --name final-tier-cluster --region ap-south-1
 
       - name: Deploy to Kubernetes
         run: |
-          # Ye command deployment file mein image tag ko auto-update karegi
-          sed -i "s|image:.*|image: ${{ env.IMAGE }}|g" k8s/deployment.yaml
-          kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/service.yaml
+          # Ingress apply karein
           kubectl apply -f k8s/ingress.yaml
+
+          # Backend deploy karein
+          kubectl apply -f k8s/backend.yaml
+
+          # Frontend image update aur deploy
+          sed -i "s|image:.*|image: ${{ env.IMAGE }}|g" k8s/frontend.yaml
+          kubectl apply -f k8s/frontend.yaml
