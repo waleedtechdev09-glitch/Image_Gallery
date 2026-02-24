@@ -4,17 +4,13 @@ metadata:
   name: media-vault-alb-ingress
   namespace: default
   annotations:
-    # ALB Setup
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-
-    # Is se AWS Controller ko pata chalta hai ke ye kis group ka hissa hai
     alb.ingress.kubernetes.io/group.name: media-app-group
-
-    # Ports configuration
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-
-    # Traffic routing
+    # Ensure both ports are listed clearly
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:068011097408:certificate/f1d65122-7ab6-438c-ac72-6c17dc66e71e
+    alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
     kubernetes.io/ingress.class: alb
 spec:
   ingressClassName: alb
@@ -22,6 +18,13 @@ spec:
     - host: media-lib.conn-api.com
       http:
         paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ssl-redirect
+                port:
+                  name: use-annotation
           - path: /api
             pathType: Prefix
             backend:

@@ -41,7 +41,7 @@ const SideBar = ({
   setSelectedFolder,
   setGlobalLoading,
 }: SidebarProps) => {
-  const API_URL = "http://media-lib.conn-api.com/api";
+  const API_URL = "https://media-lib.conn-api.com/api";
   const token = getToken();
 
   const [isCreating, setIsCreating] = useState(false);
