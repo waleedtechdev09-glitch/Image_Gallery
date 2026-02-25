@@ -41,10 +41,20 @@ app.post('/resize-and-upload', upload.single('image'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No image provided' });
 
+        // 🔥 FIX: Check if file is actually an image
+        // Sharp non-image files par crash ho jata hai
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (!allowedTypes.includes(req.file.mimetype)) {
+            console.log(`⚠️ Skipping resize for non-image file: ${req.file.mimetype}`);
+            return res.status(400).json({ 
+                error: "Not an image", 
+                details: "Resizer service only supports images." 
+            });
+        }
+
         const sizes = [512, 256];
         const results = {};
 
-        // Parallel processing behtar hai performance ke liye
         await Promise.all(sizes.map(async (size) => {
             const resizedBuffer = await sharp(req.file.buffer)
                 .resize(size, size, { fit: 'cover' })
@@ -59,13 +69,13 @@ app.post('/resize-and-upload', upload.single('image'), async (req, res) => {
 
         res.json({
             success: true,
-            message: "Images processed and saved to Cloudinary",
+            message: "Images processed",
             data: results
         });
 
     } catch (error) {
-        console.error("Resizer Error Detail:", error);
-        res.status(500).json({ error: "Failed to process image", details: error.message });
+        console.error("❌ Resizer Error Detail:", error.message);
+        res.status(500).json({ error: "Processing failed", details: error.message });
     }
 });
 

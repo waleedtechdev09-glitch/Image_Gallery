@@ -1,5 +1,5 @@
 import Folder from "../models/Folder.js";
-import Image from "../models/Image.js";
+import Image from "../models/File.js";
 import cloudinary from "../config/cloudinary.js";
 
 /**

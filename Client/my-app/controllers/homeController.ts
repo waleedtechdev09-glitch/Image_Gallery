@@ -9,17 +9,17 @@ import {
 } from "../services/apiService";
 import Swal from "sweetalert2";
 
-// ... (Baaki functions same rahenge)
-
+// --- Load Folders ---
 export const loadFolders = async (token: string, setFolders: Function) => {
   try {
     const data = await fetchFoldersAPI(token);
     setFolders(data);
   } catch (err) {
-    console.error(err);
+    console.error("Folder Load Error:", err);
   }
 };
 
+// --- Load Images ---
 export const loadImages = async (
   token: string,
   folderId: string | null,
@@ -31,13 +31,14 @@ export const loadImages = async (
     const data = await fetchImagesAPI(token, folderId);
     setImages(data);
   } catch (err) {
-    console.error(err);
-    alert("Failed to load images");
+    console.error("Image Load Error:", err);
+    Swal.fire("Error", "Failed to load images", "error");
   } finally {
     setLoading(false);
   }
 };
 
+// --- Load Breadcrumb ---
 export const loadBreadcrumb = async (
   token: string,
   folderId: string | null,
@@ -48,10 +49,11 @@ export const loadBreadcrumb = async (
     const path = await fetchBreadcrumbAPI(token, folderId);
     setBreadcrumb(path);
   } catch (err) {
-    console.error(err);
+    console.error("Breadcrumb Error:", err);
   }
 };
 
+// --- Breadcrumb Navigation ---
 export const handleBreadcrumbClickController = async (
   token: string,
   pathArray: string[],
@@ -69,6 +71,7 @@ export const handleBreadcrumbClickController = async (
   }
 };
 
+// --- Handle Upload ---
 export const handleUploadController = async (
   token: string,
   files: FileList | File[],
@@ -81,15 +84,21 @@ export const handleUploadController = async (
   try {
     setUploading(true);
     await uploadImagesAPI(token, fileArray, folderId || undefined);
-    refreshImages();
+    await refreshImages(); // Refresh data after upload
+    Swal.fire("Success", "Files uploaded successfully", "success");
   } catch (err: any) {
-    console.error(err);
-    alert(err?.response?.data?.message || "Upload failed");
+    console.error("Upload Error:", err);
+    Swal.fire(
+      "Upload Failed",
+      err?.response?.data?.message || "Something went wrong",
+      "error",
+    );
   } finally {
     setUploading(false);
   }
 };
 
+// --- Handle Delete ---
 export const handleDeleteController = async (
   token: string,
   id: string,
@@ -98,7 +107,7 @@ export const handleDeleteController = async (
 ) => {
   const result = await Swal.fire({
     title: "Delete this image?",
-    text: "This action cannot be undone!",
+    text: "Original and all resized versions will be deleted!",
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#ef4444",
@@ -111,46 +120,58 @@ export const handleDeleteController = async (
     setDeletingImages((prev: string[]) => [...prev, id]);
     await deleteImageAPI(token, id);
     setImages((prev: any[]) => prev.filter((img) => img._id !== id));
-    Swal.fire("Deleted!", "Your image has been deleted.", "success");
+    Swal.fire(
+      "Deleted!",
+      "Asset removed from storage and database.",
+      "success",
+    );
   } catch (err) {
-    console.error(err);
+    console.error("Delete Error:", err);
     Swal.fire("Error", "Failed to delete image", "error");
   } finally {
     setDeletingImages((prev: string[]) => prev.filter((imgId) => imgId !== id));
   }
 };
 
-// ✨ UPDATED: MANUAL RESIZE HANDLER WITH SIZE PARAMETER
+/**
+ * ✨ FINALIZED: MANUAL RESIZE CONTROLLER
+ * Logic: Validates size, handles duplicates, and refreshes UI.
+ */
 export const handleResizeController = async (
   token: string,
   id: string,
-  targetSize: number, // 👈 Receiving size from HomePage
+  targetSize: number,
   setGlobalLoading: Function,
   refreshImages: Function,
 ) => {
   try {
     setGlobalLoading(true);
 
-    // API call mein size pass kar rahe hain
+    // Backend call for resizing
     await resizeImageAPI(token, id, targetSize);
 
+    // Refresh memory/UI
     await refreshImages();
 
     Swal.fire({
       title: "Resized!",
-      text: `Thumbnail (${targetSize}px) generated successfully.`,
+      text: `${targetSize}px version created successfully.`,
       icon: "success",
       timer: 2000,
       showConfirmButton: false,
     });
   } catch (err: any) {
-    console.error("Resize Error:", err);
-    Swal.fire(
-      "Error",
-      err.response?.data?.message ||
-        "Manual resize failed. Check if resizer service is active.",
-      "error",
-    );
+    console.error("Resize Error Details:", err);
+
+    // 🔥 Check for specific validation messages from backend (e.g., "already exists")
+    const errorMsg = err.response?.data?.message || "Manual resize failed.";
+
+    Swal.fire({
+      title: "Notice",
+      text: errorMsg,
+      icon: errorMsg.includes("exists") ? "info" : "error",
+      confirmButtonColor: "#6366f1",
+    });
   } finally {
     setGlobalLoading(false);
   }

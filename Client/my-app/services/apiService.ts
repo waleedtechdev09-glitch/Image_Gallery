@@ -53,15 +53,21 @@ export const resolveFolderPathAPI = async (
 export const uploadImagesAPI = async (
   token: string,
   files: File[],
-  folderId?: string,
+  folderId?: string | null,
 ) => {
   const formData = new FormData();
   files.forEach((file) => formData.append("images", file));
-  if (folderId) formData.append("folderId", folderId);
 
-  await axios.post(`${API_URL}/images/upload-multiple`, formData, {
-    headers: { Authorization: `Bearer ${token}` },
+  if (folderId && folderId !== "null" && folderId !== "undefined") {
+    formData.append("folderId", folderId);
+  }
+
+  const res = await axios.post(`${API_URL}/images/upload-multiple`, formData, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
+  return res.data;
 };
 
 // DELETE IMAGE
@@ -71,14 +77,17 @@ export const deleteImageAPI = async (token: string, id: string) => {
   });
 };
 
-//NEW: MANUAL RESIZE IMAGE API
+/**
+ * ✨ MANUAL RESIZE IMAGE API
+ * Matches Backend: router.post("/resize/:id", manualResize)
+ */
 export const resizeImageAPI = async (
   token: string,
   id: string,
   targetSize: number,
 ) => {
   const res = await axios.post(
-    `${API_URL}/images/resize/${id}`,
+    `${API_URL}/images/resize/${id}`, // Ensure your backend route is exactly this
     { targetSize },
     {
       headers: { Authorization: `Bearer ${token}` },
