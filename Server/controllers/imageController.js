@@ -3,200 +3,245 @@ import cloudinary from "../config/cloudinary.js";
 import axios from "axios";
 import FormData from "form-data";
 import fs from "fs";
+import path from "path";
 
-// Resizer Service URL (K8s Cluster Internal DNS)
-const RESIZER_SERVICE_URL = "http://image-resizer-service.default.svc.cluster.local/resize-and-upload";
+console.log("🔑 RESIZER URL on startup:", process.env.RESIZER_SERVICE_URL);
 
-/**
- * SINGLE FILE UPLOAD (Original Only)
- */
-export const uploadImage = async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+const RESIZER_SERVICE_URL = process.env.RESIZER_SERVICE_URL || "http://image-resizer-service.default.svc.cluster.local/resize-and-upload";
 
-    let folderId = req.body.folderId;
-    if (!folderId || folderId === "null" || folderId === "undefined") folderId = null;
-
-    // 1. Cloudinary upload (Original)
-    const result = await cloudinary.uploader.upload(req.file.path, { 
-      folder: folderId || "root",
-      resource_type: "auto" 
-    });
-
-    // 2. DB Entry (Explicitly defined fields to avoid old schema fields)
-    const newFile = await File.create({
-      uploadedBy: req.user._id,
-      url: result.secure_url,
-      public_id: result.public_id,
-      folder: folderId,
-      fileType: req.file.mimetype,
-      fileName: req.file.originalname,
-      versions: [] // Khali array on upload
-    });
-
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(201).json(newFile);
-  } catch (err) {
-    console.error("❌ Upload Error:", err.message);
-    res.status(500).json({ message: "Upload failed", error: err.message });
-  }
+const getCloudinaryResourceType = (file) => {
+    const mimetype = file.mimetype;
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (mimetype.startsWith("video/")) return "video";
+    if (mimetype === "application/json" || extension === ".json") return "raw";
+    if (mimetype === "application/pdf" || extension === ".pdf") return "image";
+    return "auto";
 };
 
 /**
- * MULTIPLE FILES UPLOAD (Original Only)
+ * HELPER: Resize image — AWAITED before response
  */
-export const uploadMultipleImages = async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) return res.status(400).json({ message: "No files" });
-    
-    let folderId = req.body.folderId;
-    if (!folderId || folderId === "null" || folderId === "undefined") folderId = null;
-
-    const results = [];
-    for (const file of req.files) {
-      const cloudRes = await cloudinary.uploader.upload(file.path, {
-        folder: folderId || "root",
-        resource_type: "auto"
-      });
-
-      const newFile = await File.create({
-        uploadedBy: req.user._id,
-        url: cloudRes.secure_url,
-        fileType: file.mimetype,
-        fileName: file.originalname,
-        public_id: cloudRes.public_id,
-        folder: folderId,
-        versions: [] 
-      });
-
-      results.push(newFile);
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
-    res.status(201).json(results);
-  } catch (err) {
-    console.error("❌ Multiple Upload Error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-/**
- * MANUAL RESIZE (With Duplicate Check & DB Cleanup)
- */
-export const manualResize = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { targetSize } = req.body; 
-
-    if (!targetSize) return res.status(400).json({ message: "Target size is required" });
-
-    const file = await File.findById(id);
-    if (!file) return res.status(404).json({ message: "File not found" });
-
-    // 1. Validation: Size pehle se exist toh nahi karta?
-    const alreadyExists = file.versions.some(v => v.size === Number(targetSize));
-    if (alreadyExists) {
-      return res.status(400).json({ 
-        message: `Image version with ${targetSize}px already exists.` 
-      });
-    }
-
-    // 2. Sirf images resize ho sakti hain
-    if (!file.fileType.startsWith("image/")) {
-      return res.status(400).json({ message: "Only image files can be resized" });
-    }
-
-    // 3. Cloudinary URL se stream download
-    const imgResponse = await axios({
-      method: 'get',
-      url: file.url,
-      responseType: 'stream'
-    });
-
-    // 4. Resizer Service Call
+const resizeAndSave = async (fileId, fileUrl) => {
+    console.log("🔄 RESIZE START:", RESIZER_SERVICE_URL);
+    const imgResponse = await axios({ method: 'get', url: fileUrl, responseType: 'stream' });
     const form = new FormData();
     form.append("image", imgResponse.data, { filename: 'image.png' });
-    form.append("targetSize", targetSize.toString()); 
 
     const response = await axios.post(RESIZER_SERVICE_URL, form, {
-      headers: { ...form.getHeaders() },
-      timeout: 60000 
+        headers: { ...form.getHeaders() },
+        timeout: 60000
     });
 
-    const resizedUrl = response.data.data[`size_${targetSize}`];
-    const resizedPublicId = response.data.data.public_id || `resized_${id}_${targetSize}`;
+    const { size_256, size_512 } = response.data.data;
 
-    // 5. DB Update ($push for version and $unset for old fields cleanup)
     const updatedFile = await File.findByIdAndUpdate(
-      id,
-      { 
-        $push: { 
-          versions: { size: Number(targetSize), url: resizedUrl, public_id: resizedPublicId } 
-        },
-        $unset: { thumbnail512: "", thumbnail256: "" } // Force delete old fields
-      },
-      { new: true }
+        fileId,
+        { $set: { thumbnail256: size_256, thumbnail512: size_512 } },
+        { new: true }
     );
 
-    res.status(200).json({ success: true, data: updatedFile });
+    console.log(`✅ Resize complete for: ${fileId}`);
+    return updatedFile;
+};
 
-  } catch (err) {
-    console.error("❌ Resize Error:", err.message);
-    res.status(500).json({ 
-      message: "Resizer Service failed", 
-      error: err.response?.data || err.message 
-    });
-  }
+/**
+ * SINGLE FILE UPLOAD
+ */
+export const uploadImage = async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+        let folderId = req.body.folderId;
+        if (!folderId || folderId === "null" || folderId === "undefined") folderId = null;
+
+        const resourceType = getCloudinaryResourceType(req.file);
+        const result = await cloudinary.uploader.upload(req.file.path, {
+            folder: folderId || "root",
+            resource_type: resourceType,
+        });
+
+        let newFile = await File.create({
+            uploadedBy: req.user._id,
+            url: result.secure_url,
+            public_id: result.public_id,
+            folder: folderId,
+            fileType: req.file.mimetype,
+            fileName: req.file.originalname,
+            versions: [],
+            thumbnail256: null,
+            thumbnail512: null,
+        });
+
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+        if (req.file.mimetype.startsWith("image/")) {
+            try {
+                newFile = await resizeAndSave(newFile._id, newFile.url);
+            } catch (resizeErr) {
+                console.error("⚠️ Resize failed (non-critical):", resizeErr.message);
+            }
+        }
+
+        res.status(201).json(newFile);
+
+    } catch (err) {
+        console.error("❌ Single Upload Error:", err);
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ message: "Upload failed", error: err.message });
+    }
+};
+
+/**
+ * MULTIPLE FILES UPLOAD
+ */
+export const uploadMultipleImages = async (req, res) => {
+    console.log("🚀 REQUEST RECEIVED IN CONTROLLER");
+    console.log("Files:", req.files?.length);
+
+    try {
+        if (!req.files || req.files.length === 0)
+            return res.status(400).json({ message: "No files provided" });
+
+        let folderId = req.body.folderId;
+        if (!folderId || folderId === "null" || folderId === "undefined") folderId = null;
+
+        const results = [];
+
+        for (const file of req.files) {
+            const resourceType = getCloudinaryResourceType(file);
+            const cloudRes = await cloudinary.uploader.upload(file.path, {
+                folder: folderId || "root",
+                resource_type: resourceType
+            });
+
+            let newFile = await File.create({
+                uploadedBy: req.user._id,
+                url: cloudRes.secure_url,
+                fileType: file.mimetype,
+                fileName: file.originalname,
+                public_id: cloudRes.public_id,
+                folder: folderId,
+                versions: [],
+                thumbnail256: null,
+                thumbnail512: null,
+            });
+
+            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+
+            if (file.mimetype.startsWith("image/")) {
+                try {
+                    newFile = await resizeAndSave(newFile._id, newFile.url);
+                } catch (resizeErr) {
+                    console.error("⚠️ Resize failed (non-critical):", resizeErr.message);
+                }
+            }
+
+            results.push(newFile);
+        }
+
+        res.status(201).json(results);
+
+    } catch (err) {
+        console.error("❌ Multiple Upload Error:", err);
+        if (req.files) req.files.forEach(f => { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); });
+        res.status(500).json({ message: "Multiple upload failed", error: err.message });
+    }
 };
 
 /**
  * FETCH FILES
  */
 export const getImages = async (req, res) => {
-  try {
-    const { folderId } = req.query;
-    const query = { uploadedBy: req.user._id };
-    
-    if (folderId && folderId !== 'null' && folderId !== 'undefined') {
-      query.folder = folderId;
-    } else {
-      query.folder = null; 
+    try {
+        const { folderId } = req.query;
+        const query = { uploadedBy: req.user._id };
+
+        if (folderId && folderId !== 'null' && folderId !== 'undefined') {
+            query.folder = folderId;
+        } else {
+            query.folder = null;
+        }
+
+        const files = await File.find(query).sort({ createdAt: -1 });
+        res.status(200).json(files);
+    } catch (err) {
+        res.status(500).json({ message: "Failed to fetch files" });
     }
-    
-    const files = await File.find(query).sort({ createdAt: -1 });
-    res.status(200).json(files);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to fetch files" });
-  }
 };
 
 /**
- * DELETE FILE
+ * DELETE FILE — Fixed: 'auto' -> 'image' for Cloudinary delete
  */
 export const deleteImage = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const file = await File.findById(id);
+    try {
+        const { id } = req.params;
+        const file = await File.findById(id);
 
-    if (!file) return res.status(404).json({ message: "File not found" });
-    if (file.uploadedBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
+        if (!file) return res.status(404).json({ message: "File not found" });
+        if (file.uploadedBy.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: "Not authorized" });
+        }
+
+        // ✅ FIX: 'auto' Cloudinary delete mein support nahi - 'image' use karo
+        let resourceType = getCloudinaryResourceType({ mimetype: file.fileType, originalname: file.fileName });
+        if (resourceType === 'auto') resourceType = 'image';
+
+        if (file.public_id) {
+            await cloudinary.uploader.destroy(file.public_id, { resource_type: resourceType });
+        }
+
+        if (file.versions && file.versions.length > 0) {
+            for (const version of file.versions) {
+                if (version.public_id) await cloudinary.uploader.destroy(version.public_id, { resource_type: "image" });
+            }
+        }
+
+        await File.findByIdAndDelete(id);
+        res.status(200).json({ message: "Deleted successfully" });
+    } catch (err) {
+        console.error("❌ Delete Error:", err);
+        res.status(500).json({ message: "Failed to delete" });
     }
+};
 
-    // 1. Cloudinary se Original delete karein
-    if (file.public_id) await cloudinary.uploader.destroy(file.public_id);
+/**
+ * MANUAL RESIZE
+ */
+export const manualResize = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { targetSize } = req.body;
 
-    // 2. Cloudinary se saaray Resized versions delete karein
-    if (file.versions && file.versions.length > 0) {
-      for (const version of file.versions) {
-        if (version.public_id) await cloudinary.uploader.destroy(version.public_id);
-      }
+        if (!targetSize) return res.status(400).json({ message: "Target size is required" });
+
+        const file = await File.findById(id);
+        if (!file) return res.status(404).json({ message: "File not found" });
+        if (!file.fileType.startsWith("image/")) {
+            return res.status(400).json({ message: "Only image files can be resized." });
+        }
+
+        const imgResponse = await axios({ method: 'get', url: file.url, responseType: 'stream' });
+        const form = new FormData();
+        form.append("image", imgResponse.data, { filename: 'image.png' });
+        form.append("targetSize", targetSize.toString());
+
+        const response = await axios.post(RESIZER_SERVICE_URL, form, {
+            headers: { ...form.getHeaders() },
+            timeout: 60000
+        });
+
+        const resizedUrl = response.data.data[`size_${targetSize}`];
+        const resizedPublicId = response.data.data.public_id || `resized_${id}_${targetSize}`;
+
+        const updatedFile = await File.findByIdAndUpdate(
+            id,
+            { $push: { versions: { size: Number(targetSize), url: resizedUrl, public_id: resizedPublicId } } },
+            { new: true }
+        );
+
+        res.status(200).json({ success: true, data: updatedFile });
+    } catch (err) {
+        console.error("❌ Resize Error:", err.message);
+        res.status(500).json({ message: "Resizer Service failed", error: err.response?.data || err.message });
     }
-
-    // 3. DB se entry delete karein
-    await File.findByIdAndDelete(id);
-    
-    res.status(200).json({ message: "Deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to delete" });
-  }
 };

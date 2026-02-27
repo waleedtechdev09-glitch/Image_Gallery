@@ -1,6 +1,0 @@
-{
-  "name": "Library Management System",
-  "version": "1.0.0",
-  "description": "A comprehensive library management system built with Node.js, Express, and MongoDB.",
-  "main": "server.js"
-}

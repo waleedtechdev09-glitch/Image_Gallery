@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getToken, removeToken, isLoggedIn } from "@/utils/auth";
 import SideBar from "@/components/SideBar";
@@ -14,15 +14,16 @@ import {
   FolderPlus,
   X,
   Download,
-  Scale,
   ChevronRight,
   Search,
   Check,
-  MousePointer2,
-  FileText,
-  FileJson, // Added for JSON
-  Video, // Added for Video
   Home,
+  CheckSquare,
+  Square,
+  FileText,
+  FileJson,
+  Video,
+  Link as LinkIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -33,8 +34,18 @@ import {
   handleBreadcrumbClickController,
   handleUploadController,
   handleDeleteController,
-  handleResizeController,
 } from "../controllers/homeController";
+import { deleteImageAPI } from "@/services/apiService";
+
+type SizeOption = "original" | "512px" | "256px";
+
+interface PreviewImage {
+  url: string;
+  id: string;
+  type: "image" | "video";
+  thumbnail256?: string | null;
+  thumbnail512?: string | null;
+}
 
 const HomePage = () => {
   const router = useRouter();
@@ -50,19 +61,12 @@ const HomePage = () => {
   const [imagesLoading, setImagesLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [globalLoading, setGlobalLoading] = useState(false);
-  const [previewImage, setPreviewImage] = useState<{
-    url: string;
-    id: string;
-    label: string;
-    type: "image" | "video" | "json" | "pdf";
-  } | null>(null);
+  const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
+  const [previewSize, setPreviewSize] = useState<SizeOption>("original");
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [userSelectedSizes, setUserSelectedSizes] = useState<{
-    [key: string]: string;
-  }>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const token = getToken();
@@ -72,42 +76,63 @@ const HomePage = () => {
     else setIsAuthorized(true);
   }, [router]);
 
-  const fetchContent = async () => {
+  const fetchContent = useCallback(async () => {
     if (!token) return;
     try {
       await loadImages(token, selectedFolder, setImages, () => {});
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [token, selectedFolder]);
 
   useEffect(() => {
     const load = async () => {
       if (!token || !isAuthorized) return;
       setImagesLoading(true);
       try {
-        await loadFolders(token, setFolders);
-        await fetchContent();
-        await loadBreadcrumb(token, selectedFolder, setBreadcrumb);
+        await Promise.all([
+          loadFolders(token, setFolders),
+          fetchContent(),
+          loadBreadcrumb(token, selectedFolder, setBreadcrumb),
+        ]);
       } finally {
         setImagesLoading(false);
       }
     };
     load();
-  }, [selectedFolder, token, isAuthorized]);
+  }, [selectedFolder, token, isAuthorized, fetchContent]);
 
   const filteredImages = useMemo(() => {
     return images.filter((img) => {
       const matchesSearch = img._id
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
-      if (selectedFolder === null) {
+      if (selectedFolder === null)
         return matchesSearch && !img.folder && !img.folderId;
-      }
       return matchesSearch;
     });
   }, [images, searchQuery, selectedFolder]);
 
+  // ─── Sign Out with Confirm ─────────────────────────────────────────────────
+  const handleSignOut = async () => {
+    const result = await Swal.fire({
+      title: "Sign Out?",
+      text: "do you want to sign out?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "yes, Sign Out",
+      cancelButtonText: "no, Stay",
+    });
+
+    if (result.isConfirmed) {
+      removeToken();
+      router.replace("/");
+    }
+  };
+
+  // ─── Download ──────────────────────────────────────────────────────────────
   const handleDownloadImage = async (
     fileUrl: string,
     id: string,
@@ -120,7 +145,7 @@ const HomePage = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const extension = fileUrl.split(".").pop();
+      const extension = fileUrl.split("?")[0].split(".").pop() || "png";
       const fileName =
         label === "Original"
           ? `original-${id.slice(-6)}`
@@ -130,41 +155,93 @@ const HomePage = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch {
       window.open(fileUrl, "_blank");
     } finally {
       setGlobalLoading(false);
     }
   };
 
-  const onResizeClick = async (imgId: string) => {
-    const { value: size } = await Swal.fire({
-      title: "Resize Asset",
-      input: "radio",
-      inputOptions: {
-        original: "Original Size",
-        "256": "Low (256px)",
-        "512": "High (512px)",
-      },
+  // ─── Single Delete with Confirm ────────────────────────────────────────────
+  const handleSingleDelete = async (imgId: string) => {
+    const result = await Swal.fire({
+      title: "Delete karo?",
+      text: "Are you sure you want to delete this asset?",
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#4f46e5",
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
     });
-    if (size) {
-      if (size === "original") {
-        setUserSelectedSizes((prev) => ({ ...prev, [imgId]: "Original" }));
-      } else {
-        await handleResizeController(
-          token!,
-          imgId,
-          parseInt(size),
-          setGlobalLoading,
-          async () => {
-            await fetchContent();
-            setUserSelectedSizes((prev) => ({ ...prev, [imgId]: `${size}px` }));
-          },
-        );
+
+    if (result.isConfirmed) {
+      setGlobalLoading(true);
+      try {
+        await deleteImageAPI(token!, imgId);
+        await fetchContent();
+        Swal.fire("Deleted!", "Asset deleted successfully.", "success");
+      } catch (err) {
+        Swal.fire("Error", "Failed to delete asset.", "error");
+      } finally {
+        setGlobalLoading(false);
       }
     }
+  };
+
+  // ─── Bulk Delete ───────────────────────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    if (selectedImages.length === 0) return;
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `${selectedImages.length} assets will be deleted!`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+    });
+
+    if (result.isConfirmed) {
+      setGlobalLoading(true);
+      try {
+        await Promise.all(
+          selectedImages.map((id) => deleteImageAPI(token!, id)),
+        );
+        await fetchContent();
+        setSelectedImages([]);
+        setIsSelectionMode(false);
+        Swal.fire("Deleted!", "Assets deleted successfully.", "success");
+      } catch (err) {
+        Swal.fire("Error", "Failed to delete assets.", "error");
+      } finally {
+        setGlobalLoading(false);
+      }
+    }
+  };
+
+  // ─── Preview ───────────────────────────────────────────────────────────────
+  const getPreviewUrl = (img: PreviewImage, size: SizeOption): string => {
+    if (size === "256px" && img.thumbnail256) return img.thumbnail256;
+    if (size === "512px" && img.thumbnail512) return img.thumbnail512;
+    return img.url;
+  };
+
+  const openPreview = (img: any) => {
+    const isVideo =
+      img.url?.toLowerCase().endsWith(".mp4") ||
+      img.url?.toLowerCase().endsWith(".webm") ||
+      img.url?.toLowerCase().endsWith(".mov");
+
+    setPreviewImage({
+      url: img.url,
+      id: img._id,
+      type: isVideo ? "video" : "image",
+      thumbnail256: img.thumbnail256 || null,
+      thumbnail512: img.thumbnail512 || null,
+    });
+    setPreviewSize("original");
   };
 
   if (!isAuthorized) return null;
@@ -194,41 +271,49 @@ const HomePage = () => {
 
       <main className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-slate-200 bg-white/80 backdrop-blur-md px-4 lg:px-8 flex items-center justify-between sticky top-0 z-40">
-          <nav className="flex items-center text-sm font-medium">
+          <nav className="flex items-center text-sm font-medium overflow-hidden">
             <div
               onClick={() => setSelectedFolderState(null)}
-              className="p-2 rounded-lg hover:bg-slate-100 cursor-pointer text-slate-400 hover:text-indigo-600 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-100 cursor-pointer text-slate-400 hover:text-indigo-600 shrink-0"
             >
               <Home size={18} />
             </div>
-            {breadcrumb
-              .split("/")
-              .filter(Boolean)
-              .map((name, idx, arr) => (
-                <div key={idx} className="flex items-center">
-                  <ChevronRight size={14} className="mx-1 text-slate-300" />
-                  <span
-                    className={`truncate px-2 py-1 rounded-md ${idx === arr.length - 1 ? "text-slate-900 font-bold bg-slate-50" : "text-slate-500 hover:text-indigo-600 cursor-pointer"}`}
-                    onClick={() =>
-                      idx !== arr.length - 1 &&
-                      handleBreadcrumbClickController(
-                        token!,
-                        arr.slice(0, idx + 1),
-                        setSelectedFolderState,
-                      )
-                    }
-                  >
-                    {name}
-                  </span>
-                </div>
-              ))}
+            <div className="flex items-center overflow-x-auto no-scrollbar whitespace-nowrap">
+              {breadcrumb
+                .split("/")
+                .filter(Boolean)
+                .map((name, idx, arr) => (
+                  <div key={idx} className="flex items-center">
+                    <ChevronRight
+                      size={14}
+                      className="mx-1 text-slate-300 shrink-0"
+                    />
+                    <span
+                      className={`truncate max-w-[150px] px-2 py-1 rounded-md ${
+                        idx === arr.length - 1
+                          ? "text-slate-900 font-bold bg-slate-50"
+                          : "text-slate-500 hover:text-indigo-600 cursor-pointer"
+                      }`}
+                      onClick={() =>
+                        idx !== arr.length - 1 &&
+                        handleBreadcrumbClickController(
+                          token!,
+                          arr.slice(0, idx + 1),
+                          setSelectedFolderState,
+                        )
+                      }
+                    >
+                      {name}
+                    </span>
+                  </div>
+                ))}
+            </div>
           </nav>
+
+          {/* ✅ Sign Out with confirmation */}
           <Button
             variant="ghost"
-            onClick={() => {
-              removeToken();
-              router.replace("/");
-            }}
+            onClick={handleSignOut}
             className="text-slate-500 hover:text-red-600"
           >
             <LogOut size={18} className="lg:mr-2" />
@@ -239,26 +324,59 @@ const HomePage = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
-          <div className="flex flex-col sm:flex-row gap-4 mb-8 items-center">
-            <div className="relative w-full sm:flex-1">
-              <Search
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                size={18}
-              />
-              <input
-                type="text"
-                placeholder="Search assets..."
-                className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:border-indigo-500 shadow-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+          {/* Top Controls */}
+          <div className="flex flex-col gap-4 mb-8">
+            <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
+              <div className="relative w-full flex-1">
+                <Search
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search assets..."
+                  className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:border-indigo-500 shadow-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                {/* ✅ Mobile: Selection mode toggle */}
+                <Button
+                  variant={isSelectionMode ? "default" : "outline"}
+                  size="sm"
+                  className={`flex-1 sm:flex-none h-11 px-4 rounded-xl ${isSelectionMode ? "bg-indigo-600 text-white" : ""}`}
+                  onClick={() => {
+                    setIsSelectionMode(!isSelectionMode);
+                    setSelectedImages([]);
+                  }}
+                >
+                  {isSelectionMode ? (
+                    <CheckSquare size={16} className="mr-2" />
+                  ) : (
+                    <Square size={16} className="mr-2" />
+                  )}
+                  {isSelectionMode ? "Cancel" : "Select"}
+                </Button>
+                {selectedImages.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex-1 bg-red-600 text-white sm:flex-none h-11 px-4 rounded-xl"
+                    onClick={handleBulkDelete}
+                  >
+                    <Trash2 size={16} className="mr-2" /> Delete (
+                    {selectedImages.length})
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Upload Area Updated for Video/JSON */}
+          {/* Upload Area */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="group border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-3xl p-10 text-center transition-all cursor-pointer bg-white/50 hover:bg-white mb-12 shadow-sm"
+            className="group border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-3xl p-8 text-center transition-all cursor-pointer bg-white/50 hover:bg-white mb-10 shadow-sm"
           >
             {uploading ? (
               <div className="flex flex-col items-center">
@@ -266,16 +384,16 @@ const HomePage = () => {
                   className="animate-spin text-indigo-600 mb-2"
                   size={32}
                 />
-                <p className="font-bold text-indigo-600 animate-pulse text-sm">
+                <p className="font-bold text-indigo-600 text-sm">
                   Uploading...
                 </p>
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner">
-                  <FolderPlus size={28} />
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <FolderPlus size={24} />
                 </div>
-                <h3 className="text-base font-semibold text-slate-800">
+                <h3 className="text-sm font-semibold text-slate-800">
                   Add New Assets
                 </h3>
                 <p className="text-slate-400 text-xs mt-1">
@@ -288,6 +406,7 @@ const HomePage = () => {
               multiple
               ref={fileInputRef}
               accept="image/*,video/*,application/json,application/pdf"
+              className="hidden"
               onChange={(e) =>
                 e.target.files &&
                 handleUploadController(
@@ -298,14 +417,14 @@ const HomePage = () => {
                   fetchContent,
                 )
               }
-              className="hidden"
             />
           </div>
 
+          {/* Asset Grid */}
           {imagesLoading ? (
             <AssetSkeleton />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6">
               {filteredImages.map((img) => {
                 const urlLower = img.url?.toLowerCase() || "";
                 const isPdf = urlLower.endsWith(".pdf");
@@ -314,43 +433,62 @@ const HomePage = () => {
                   urlLower.endsWith(".mp4") ||
                   urlLower.endsWith(".webm") ||
                   urlLower.endsWith(".mov");
-
-                let displayUrl = img.url;
-                let displayLabel = "Original";
-                const userSize = userSelectedSizes[img._id];
-
-                if (!isPdf && !isJson && !isVideo) {
-                  if (userSize === "256px" && img.thumbnail256) {
-                    displayUrl = img.thumbnail256;
-                    displayLabel = "256px";
-                  } else if (userSize === "512px" && img.thumbnail512) {
-                    displayUrl = img.thumbnail512;
-                    displayLabel = "512px";
-                  }
-                }
+                const isSelected = selectedImages.includes(img._id);
 
                 return (
                   <div
                     key={img._id}
-                    className="group bg-white rounded-2xl border border-slate-200 transition-all duration-300 relative shadow-sm hover:shadow-lg"
+                    className={`group bg-white rounded-2xl border ${
+                      isSelected
+                        ? "border-indigo-500 ring-2 ring-indigo-200"
+                        : "border-slate-200"
+                    } transition-all duration-300 relative shadow-sm hover:shadow-lg overflow-hidden`}
                   >
-                    <div className="relative aspect-square overflow-hidden rounded-t-2xl bg-slate-50 flex items-center justify-center">
+                    <div className="relative aspect-square overflow-hidden bg-slate-50 flex items-center justify-center">
+                      {/* Selection overlay */}
+                      {isSelectionMode && (
+                        <div
+                          onClick={() =>
+                            setSelectedImages((prev) =>
+                              prev.includes(img._id)
+                                ? prev.filter((i) => i !== img._id)
+                                : [...prev, img._id],
+                            )
+                          }
+                          className="absolute inset-0 z-30 bg-indigo-600/10 cursor-pointer flex p-3"
+                        >
+                          <div
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                              isSelected
+                                ? "bg-indigo-600 border-indigo-600 text-white"
+                                : "bg-white/80 border-slate-300"
+                            }`}
+                          >
+                            {isSelected && <Check size={14} strokeWidth={4} />}
+                          </div>
+                        </div>
+                      )}
+
                       {isPdf ? (
                         <div
                           className="flex flex-col items-center cursor-pointer"
-                          onClick={() => window.open(img.url, "_blank")}
+                          onClick={() =>
+                            !isSelectionMode && window.open(img.url, "_blank")
+                          }
                         >
-                          <FileText size={44} className="text-red-500 mb-2" />
+                          <FileText size={40} className="text-red-500 mb-1" />
                           <span className="text-[10px] font-bold text-red-600 uppercase">
-                            View PDF
+                            PDF
                           </span>
                         </div>
                       ) : isJson ? (
                         <div
                           className="flex flex-col items-center cursor-pointer"
-                          onClick={() => window.open(img.url, "_blank")}
+                          onClick={() =>
+                            !isSelectionMode && window.open(img.url, "_blank")
+                          }
                         >
-                          <FileJson size={44} className="text-amber-500 mb-2" />
+                          <FileJson size={40} className="text-amber-500 mb-1" />
                           <span className="text-[10px] font-bold text-amber-600 uppercase">
                             JSON
                           </span>
@@ -358,81 +496,64 @@ const HomePage = () => {
                       ) : isVideo ? (
                         <div
                           className="flex flex-col items-center cursor-pointer"
-                          onClick={() =>
-                            setPreviewImage({
-                              url: img.url,
-                              id: img._id,
-                              label: "Original",
-                              type: "video",
-                            })
-                          }
+                          onClick={() => !isSelectionMode && openPreview(img)}
                         >
-                          <Video size={44} className="text-indigo-500 mb-2" />
+                          <Video size={40} className="text-indigo-500 mb-1" />
                           <span className="text-[10px] font-bold text-indigo-600 uppercase">
-                            Play Video
+                            Video
                           </span>
                         </div>
                       ) : (
                         <NextImage
-                          src={displayUrl}
+                          src={img.url}
                           alt="asset"
                           fill
                           className="object-cover cursor-pointer group-hover:scale-105 transition-transform"
-                          onClick={() =>
-                            setPreviewImage({
-                              url: displayUrl,
-                              id: img._id,
-                              label: displayLabel,
-                              type: "image",
-                            })
-                          }
+                          onClick={() => !isSelectionMode && openPreview(img)}
                         />
                       )}
 
-                      <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteController(
-                              token!,
-                              img._id,
-                              () => {},
-                              setImages,
-                            );
-                          }}
-                          className="p-2 bg-white text-red-600 rounded-lg hover:bg-red-600 hover:text-white shadow-md"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                        {!isPdf && !isJson && !isVideo && (
+                      {/* Desktop: hover delete button */}
+                      {!isSelectionMode && (
+                        <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20 hidden sm:flex">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onResizeClick(img._id);
+                              handleSingleDelete(img._id);
                             }}
-                            className="p-2 bg-white text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white shadow-md"
+                            className="p-2 bg-white/90 text-red-600 rounded-lg hover:bg-red-600 hover:text-white shadow-lg"
                           >
-                            <Scale size={14} />
+                            <Trash2 size={16} />
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="p-4">
-                      <p className="text-[11px] font-bold text-slate-800 truncate">
-                        ID: {img._id.slice(-6)}
-                      </p>
-                      <p
-                        className={`text-[9px] font-extrabold mt-1 uppercase tracking-wider ${displayLabel === "Original" ? "text-slate-400" : "text-indigo-600"}`}
-                      >
-                        {isPdf
-                          ? "PDF"
-                          : isJson
-                            ? "JSON"
-                            : isVideo
-                              ? "Video"
-                              : displayLabel}
-                      </p>
+                    <div className="p-3 bg-white">
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-[10px] font-bold text-slate-500">
+                          ID: {img._id.slice(-6)}
+                        </p>
+                        <p className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-400">
+                          {isPdf
+                            ? "PDF"
+                            : isJson
+                              ? "JSON"
+                              : isVideo
+                                ? "VIDEO"
+                                : "IMAGE"}
+                        </p>
+                      </div>
+
+                      {/* ✅ Mobile: Delete button always visible */}
+                      {!isSelectionMode && (
+                        <button
+                          onClick={() => handleSingleDelete(img._id)}
+                          className="sm:hidden w-full mt-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100 active:bg-red-100"
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -442,45 +563,110 @@ const HomePage = () => {
         </div>
       </main>
 
-      {/* Preview Modal for Images and Videos */}
+      {/* Preview Modal */}
       {previewImage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/95 p-4 backdrop-blur-md">
           <button
             onClick={() => setPreviewImage(null)}
-            className="absolute top-6 right-6 p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-full"
+            className="absolute top-6 right-6 p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
           >
             <X size={28} />
           </button>
-          <div className="relative w-full max-w-5xl h-[85vh] flex flex-col items-center justify-center">
-            <div className="relative w-full h-full rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-black/20">
+
+          <div className="relative w-full max-w-5xl flex flex-col items-center gap-6">
+            <div className="relative w-full h-[65vh] rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-black/20">
               {previewImage.type === "video" ? (
                 <video
                   src={previewImage.url}
                   controls
                   className="w-full h-full object-contain"
+                  autoPlay
                 />
               ) : (
                 <img
-                  src={previewImage.url}
-                  className="w-full h-full object-contain"
+                  src={getPreviewUrl(previewImage, previewSize)}
+                  className="w-full h-full object-contain transition-opacity duration-200"
                   alt="preview"
                 />
               )}
             </div>
-            <div className="mt-6">
+
+            {previewImage.type === "image" && (
+              <div className="w-full flex flex-col sm:flex-row items-center justify-center gap-3 px-4">
+                <div className="flex bg-white/10 rounded-2xl p-1 gap-1">
+                  {(
+                    [
+                      { key: "original", label: "Original" },
+                      {
+                        key: "512px",
+                        label: "512 px",
+                        available: !!previewImage.thumbnail512,
+                      },
+                      {
+                        key: "256px",
+                        label: "256 px",
+                        available: !!previewImage.thumbnail256,
+                      },
+                    ] as {
+                      key: SizeOption;
+                      label: string;
+                      available?: boolean;
+                    }[]
+                  ).map(({ key, label, available }) => {
+                    const isAvailable = key === "original" || available;
+                    return (
+                      <button
+                        key={key}
+                        disabled={!isAvailable}
+                        onClick={() => setPreviewSize(key)}
+                        className={`relative px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                          previewSize === key
+                            ? "bg-white text-slate-900 shadow-lg"
+                            : isAvailable
+                              ? "text-white/70 hover:text-white hover:bg-white/10"
+                              : "text-white/20 cursor-not-allowed"
+                        }`}
+                      >
+                        {label}
+                        {!isAvailable && key !== "original" && (
+                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() =>
+                    handleDownloadImage(
+                      getPreviewUrl(previewImage, previewSize),
+                      previewImage.id,
+                      previewSize === "original" ? "Original" : previewSize,
+                    )
+                  }
+                  className="flex items-center justify-center gap-3 bg-white text-slate-900 px-10 py-3 rounded-2xl font-bold hover:bg-indigo-50 transition-all shadow-2xl active:scale-95"
+                >
+                  <Download size={18} />
+                  Download{" "}
+                  {previewSize === "original" ? "Original" : previewSize}
+                </button>
+              </div>
+            )}
+
+            {previewImage.type === "video" && (
               <button
                 onClick={() =>
                   handleDownloadImage(
                     previewImage.url,
                     previewImage.id,
-                    previewImage.label,
+                    "Original",
                   )
                 }
-                className="flex items-center gap-3 bg-white text-slate-900 px-10 py-4 rounded-2xl font-bold hover:bg-indigo-50 transition-all shadow-2xl active:scale-95"
+                className="flex items-center justify-center gap-3 bg-white text-slate-900 px-12 py-4 rounded-2xl font-bold hover:bg-indigo-50 transition-all shadow-2xl active:scale-95"
               >
-                <Download size={20} /> Download {previewImage.label}
+                <Download size={20} /> Download Video
               </button>
-            </div>
+            )}
           </div>
         </div>
       )}

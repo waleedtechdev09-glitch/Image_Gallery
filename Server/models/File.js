@@ -2,31 +2,35 @@ import mongoose from "mongoose";
 
 const fileSchema = new mongoose.Schema(
   {
-    uploadedBy: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "User", 
-      required: true 
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
     },
-    url: { 
-      type: String, 
-      required: true 
-    }, // Ye Original Image (1024px ya Full Size) ka URL hoga
+    url: {
+      type: String,
+      required: true
+    }, // Original image (full size) URL
 
-    fileType: { type: String }, 
-    fileName: { type: String }, 
+    fileType: { type: String },
+    fileName: { type: String },
     public_id: { type: String, required: true },
-    folder: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "Folder" 
+    folder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Folder"
     },
 
-    // 🔥 NEW: Versions Array
-    // Isme sirf wo sizes save honge jo user manually "Resize" button daba kar banayega
+    // ✅ Auto-generated thumbnails after upload (images only)
+    // These are set automatically by the background resize job
+    thumbnail256: { type: String, default: null }, // 256px resized URL
+    thumbnail512: { type: String, default: null }, // 512px resized URL
+
+    // Manual resize versions (kept for compatibility)
     versions: [
       {
-        size: { type: Number }, // e.g., 512, 256, 800
-        url: { type: String },  // Cloudinary URL for this specific size
-        public_id: { type: String } // Resized image ko delete karne ke liye
+        size: { type: Number },    // e.g., 512, 256, 800
+        url: { type: String },     // Cloudinary URL for this size
+        public_id: { type: String } // For deletion
       }
     ],
   },

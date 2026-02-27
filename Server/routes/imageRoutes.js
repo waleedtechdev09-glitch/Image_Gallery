@@ -7,24 +7,35 @@ import {
   manualResize 
 } from "../controllers/imageController.js";
 import { protect } from "../middleware/authMiddleware.js";
-// 🔥 Apne asli Multer config ko import karein
-import { upload } from "../middleware/upload.js"; 
-import { authenticate } from "../middleware/auth.js";
+import { upload } from "../middleware/upload.js";
+import multer from "multer"; 
 
 const router = express.Router();
 
-// ❌ Purani 'const upload = multer...' wali line yahan se delete kar di hai
-
+// Sirf ek Auth middleware use karein (protect)
 router.use(protect);
 
-// Single upload ke liye field name 'image'
-router.post("/upload", upload.single("image"), uploadImage);
+// SINGLE UPLOAD: Frontend se field name "image" hona chahiye
+router.post("/upload", protect,upload.single("image"), uploadImage);
+router.post("/upload",protect, upload.single("image"), uploadImage);
 
-// Multiple upload ke liye field name 'images' (Frontend ke mutabiq)
-router.post("/upload-multiple",  upload.array("images"), uploadMultipleImages);
+// MULTIPLE UPLOAD: Frontend se field name "images" hona chahiye
+// .array("images", 10) mein limit bhi set kar sakte hain (e.g., max 10 files)
+router.post("/upload-multiple",protect, (req, res, next) => {
+  upload.array("images")(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      // Multer ke apne errors (e.g. Size limit)
+      return res.status(400).json({ message: "Multer Error", error: err.message });
+    } else if (err) {
+      // Hamara custom error (e.g. File type not supported)
+      return res.status(400).json({ message: err.message });
+    }
+    next(); // Agar sab theek hai to controller par jao
+  });
+}, uploadMultipleImages);
 
-router.post("/resize/:id",  manualResize); 
-router.get("/", getImages);
-router.delete("/:id", deleteImage);
+router.post("/resize/:id",protect, manualResize); 
+router.get("/", protect,getImages);
+router.delete("/:id",protect, deleteImage);
 
 export default router;

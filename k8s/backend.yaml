@@ -17,6 +17,9 @@ spec:
           image: public.ecr.aws/j8p6d9w0/updated-server
           ports:
             - containerPort: 5000
+          env:
+            - name: RESIZER_SERVICE_URL
+              value: "http://image-resizer-service.default.svc.cluster.local/resize-and-upload"
 ---
 apiVersion: v1
 kind: Service
