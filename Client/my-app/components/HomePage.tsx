@@ -23,7 +23,11 @@ import {
   FileText,
   FileJson,
   Video,
-  Link as LinkIcon,
+  Music,
+  Archive,
+  FileSpreadsheet,
+  Presentation,
+  AlignLeft,
 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -33,7 +37,6 @@ import {
   loadBreadcrumb,
   handleBreadcrumbClickController,
   handleUploadController,
-  handleDeleteController,
 } from "../controllers/homeController";
 import { deleteImageAPI } from "@/services/apiService";
 
@@ -42,11 +45,112 @@ type SizeOption = "original" | "512px" | "256px";
 interface PreviewImage {
   url: string;
   id: string;
-  type: "image" | "video";
+  type: "image" | "video" | "audio";
   thumbnail256?: string | null;
   thumbnail512?: string | null;
 }
 
+// ─── File Type Detector ───────────────────────────────────────────────────────
+const getFileType = (url: string) => {
+  const u = url?.toLowerCase().split("?")[0] || "";
+  if (u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".mov"))
+    return "video";
+  if (
+    u.endsWith(".mp3") ||
+    u.endsWith(".wav") ||
+    u.endsWith(".ogg") ||
+    u.endsWith(".aac")
+  )
+    return "audio";
+  if (u.endsWith(".pdf")) return "pdf";
+  if (u.endsWith(".json")) return "json";
+  if (u.endsWith(".docx") || u.endsWith(".doc")) return "word";
+  if (u.endsWith(".xlsx") || u.endsWith(".xls") || u.endsWith(".csv"))
+    return "excel";
+  if (u.endsWith(".pptx") || u.endsWith(".ppt")) return "ppt";
+  if (u.endsWith(".zip") || u.endsWith(".rar") || u.endsWith(".7z"))
+    return "archive";
+  if (u.endsWith(".txt")) return "text";
+  return "image";
+};
+
+// ─── File Type Icon & Color ───────────────────────────────────────────────────
+const FileIcon = ({ type }: { type: string }) => {
+  const map: Record<
+    string,
+    { icon: any; color: string; bg: string; label: string }
+  > = {
+    pdf: {
+      icon: FileText,
+      color: "text-red-500",
+      bg: "bg-red-50",
+      label: "PDF",
+    },
+    json: {
+      icon: FileJson,
+      color: "text-amber-500",
+      bg: "bg-amber-50",
+      label: "JSON",
+    },
+    video: {
+      icon: Video,
+      color: "text-indigo-500",
+      bg: "bg-indigo-50",
+      label: "VIDEO",
+    },
+    audio: {
+      icon: Music,
+      color: "text-purple-500",
+      bg: "bg-purple-50",
+      label: "AUDIO",
+    },
+    word: {
+      icon: FileText,
+      color: "text-blue-500",
+      bg: "bg-blue-50",
+      label: "DOCX",
+    },
+    excel: {
+      icon: FileSpreadsheet,
+      color: "text-green-500",
+      bg: "bg-green-50",
+      label: "XLSX",
+    },
+    ppt: {
+      icon: Presentation,
+      color: "text-orange-500",
+      bg: "bg-orange-50",
+      label: "PPTX",
+    },
+    archive: {
+      icon: Archive,
+      color: "text-slate-500",
+      bg: "bg-slate-50",
+      label: "ZIP",
+    },
+    text: {
+      icon: AlignLeft,
+      color: "text-slate-400",
+      bg: "bg-slate-50",
+      label: "TXT",
+    },
+  };
+  const cfg = map[type];
+  if (!cfg) return null;
+  const Icon = cfg.icon;
+  return (
+    <div
+      className={`flex flex-col items-center justify-center w-full h-full ${cfg.bg}`}
+    >
+      <Icon size={40} className={`${cfg.color} mb-1`} />
+      <span className={`text-[10px] font-bold uppercase ${cfg.color}`}>
+        {cfg.label}
+      </span>
+    </div>
+  );
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 const HomePage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -113,19 +217,17 @@ const HomePage = () => {
     });
   }, [images, searchQuery, selectedFolder]);
 
-  // ─── Sign Out with Confirm ─────────────────────────────────────────────────
+  // ─── Sign Out ──────────────────────────────────────────────────────────────
   const handleSignOut = async () => {
     const result = await Swal.fire({
       title: "Sign Out?",
-      text: "do you want to sign out?",
+      text: "Are you sure you want to sign out?",
       icon: "question",
       showCancelButton: true,
       confirmButtonColor: "#ef4444",
       cancelButtonColor: "#6b7280",
-      confirmButtonText: "yes, Sign Out",
-      cancelButtonText: "no, Stay",
+      confirmButtonText: "Yes, Sign Out",
     });
-
     if (result.isConfirmed) {
       removeToken();
       router.replace("/");
@@ -145,7 +247,7 @@ const HomePage = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const extension = fileUrl.split("?")[0].split(".").pop() || "png";
+      const extension = fileUrl.split("?")[0].split(".").pop() || "bin";
       const fileName =
         label === "Original"
           ? `original-${id.slice(-6)}`
@@ -162,26 +264,23 @@ const HomePage = () => {
     }
   };
 
-  // ─── Single Delete with Confirm ────────────────────────────────────────────
+  // ─── Single Delete ─────────────────────────────────────────────────────────
   const handleSingleDelete = async (imgId: string) => {
     const result = await Swal.fire({
-      title: "Delete karo?",
-      text: "Are you sure you want to delete this asset?",
+      title: "Delete Asset?",
+      text: "This action cannot be undone!",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Delete",
-      cancelButtonText: "Cancel",
+      confirmButtonText: "Yes, Delete",
     });
-
     if (result.isConfirmed) {
       setGlobalLoading(true);
       try {
         await deleteImageAPI(token!, imgId);
         await fetchContent();
-        Swal.fire("Deleted!", "Asset deleted successfully.", "success");
-      } catch (err) {
+        Swal.fire("Deleted!", "Asset removed successfully.", "success");
+      } catch {
         Swal.fire("Error", "Failed to delete asset.", "error");
       } finally {
         setGlobalLoading(false);
@@ -194,15 +293,12 @@ const HomePage = () => {
     if (selectedImages.length === 0) return;
     const result = await Swal.fire({
       title: "Are you sure?",
-      text: `${selectedImages.length} assets will be deleted!`,
+      text: `Deleting ${selectedImages.length} assets!`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Delete",
-      cancelButtonText: "Cancel",
+      confirmButtonText: "Yes, Delete All",
     });
-
     if (result.isConfirmed) {
       setGlobalLoading(true);
       try {
@@ -212,8 +308,8 @@ const HomePage = () => {
         await fetchContent();
         setSelectedImages([]);
         setIsSelectionMode(false);
-        Swal.fire("Deleted!", "Assets deleted successfully.", "success");
-      } catch (err) {
+        Swal.fire("Deleted!", "Assets removed successfully.", "success");
+      } catch {
         Swal.fire("Error", "Failed to delete assets.", "error");
       } finally {
         setGlobalLoading(false);
@@ -229,19 +325,19 @@ const HomePage = () => {
   };
 
   const openPreview = (img: any) => {
-    const isVideo =
-      img.url?.toLowerCase().endsWith(".mp4") ||
-      img.url?.toLowerCase().endsWith(".webm") ||
-      img.url?.toLowerCase().endsWith(".mov");
-
-    setPreviewImage({
-      url: img.url,
-      id: img._id,
-      type: isVideo ? "video" : "image",
-      thumbnail256: img.thumbnail256 || null,
-      thumbnail512: img.thumbnail512 || null,
-    });
-    setPreviewSize("original");
+    const type = getFileType(img.url);
+    if (type === "video" || type === "audio" || type === "image") {
+      setPreviewImage({
+        url: img.url,
+        id: img._id,
+        type: type as any,
+        thumbnail256: img.thumbnail256 || null,
+        thumbnail512: img.thumbnail512 || null,
+      });
+      setPreviewSize("original");
+    } else {
+      window.open(img.url, "_blank");
+    }
   };
 
   if (!isAuthorized) return null;
@@ -289,11 +385,7 @@ const HomePage = () => {
                       className="mx-1 text-slate-300 shrink-0"
                     />
                     <span
-                      className={`truncate max-w-[150px] px-2 py-1 rounded-md ${
-                        idx === arr.length - 1
-                          ? "text-slate-900 font-bold bg-slate-50"
-                          : "text-slate-500 hover:text-indigo-600 cursor-pointer"
-                      }`}
+                      className={`truncate max-w-[150px] px-2 py-1 rounded-md ${idx === arr.length - 1 ? "text-slate-900 font-bold bg-slate-50" : "text-slate-500 hover:text-indigo-600 cursor-pointer"}`}
                       onClick={() =>
                         idx !== arr.length - 1 &&
                         handleBreadcrumbClickController(
@@ -309,8 +401,6 @@ const HomePage = () => {
                 ))}
             </div>
           </nav>
-
-          {/* ✅ Sign Out with confirmation */}
           <Button
             variant="ghost"
             onClick={handleSignOut}
@@ -324,7 +414,7 @@ const HomePage = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
-          {/* Top Controls */}
+          {/* Controls */}
           <div className="flex flex-col gap-4 mb-8">
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               <div className="relative w-full flex-1">
@@ -341,7 +431,6 @@ const HomePage = () => {
                 />
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
-                {/* ✅ Mobile: Selection mode toggle */}
                 <Button
                   variant={isSelectionMode ? "default" : "outline"}
                   size="sm"
@@ -397,7 +486,8 @@ const HomePage = () => {
                   Add New Assets
                 </h3>
                 <p className="text-slate-400 text-xs mt-1">
-                  Images, Videos, JSON or PDF
+                  Images • Videos • Audio • PDF • Word • Excel • PowerPoint •
+                  ZIP • JSON • TXT
                 </p>
               </div>
             )}
@@ -405,8 +495,8 @@ const HomePage = () => {
               type="file"
               multiple
               ref={fileInputRef}
-              accept="image/*,video/*,application/json,application/pdf"
               className="hidden"
+              accept="image/*,video/*,audio/*,application/json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,application/x-rar-compressed,application/x-zip-compressed,text/plain"
               onChange={(e) =>
                 e.target.files &&
                 handleUploadController(
@@ -420,29 +510,20 @@ const HomePage = () => {
             />
           </div>
 
-          {/* Asset Grid */}
+          {/* Grid */}
           {imagesLoading ? (
             <AssetSkeleton />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6">
               {filteredImages.map((img) => {
-                const urlLower = img.url?.toLowerCase() || "";
-                const isPdf = urlLower.endsWith(".pdf");
-                const isJson = urlLower.endsWith(".json");
-                const isVideo =
-                  urlLower.endsWith(".mp4") ||
-                  urlLower.endsWith(".webm") ||
-                  urlLower.endsWith(".mov");
+                const fileType = getFileType(img.url);
+                const isImage = fileType === "image";
                 const isSelected = selectedImages.includes(img._id);
 
                 return (
                   <div
                     key={img._id}
-                    className={`group bg-white rounded-2xl border ${
-                      isSelected
-                        ? "border-indigo-500 ring-2 ring-indigo-200"
-                        : "border-slate-200"
-                    } transition-all duration-300 relative shadow-sm hover:shadow-lg overflow-hidden`}
+                    className={`group bg-white rounded-2xl border ${isSelected ? "border-indigo-500 ring-2 ring-indigo-200" : "border-slate-200"} transition-all duration-300 relative shadow-sm hover:shadow-lg overflow-hidden`}
                   >
                     <div className="relative aspect-square overflow-hidden bg-slate-50 flex items-center justify-center">
                       {/* Selection overlay */}
@@ -458,52 +539,14 @@ const HomePage = () => {
                           className="absolute inset-0 z-30 bg-indigo-600/10 cursor-pointer flex p-3"
                         >
                           <div
-                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                              isSelected
-                                ? "bg-indigo-600 border-indigo-600 text-white"
-                                : "bg-white/80 border-slate-300"
-                            }`}
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white/80 border-slate-300"}`}
                           >
                             {isSelected && <Check size={14} strokeWidth={4} />}
                           </div>
                         </div>
                       )}
 
-                      {isPdf ? (
-                        <div
-                          className="flex flex-col items-center cursor-pointer"
-                          onClick={() =>
-                            !isSelectionMode && window.open(img.url, "_blank")
-                          }
-                        >
-                          <FileText size={40} className="text-red-500 mb-1" />
-                          <span className="text-[10px] font-bold text-red-600 uppercase">
-                            PDF
-                          </span>
-                        </div>
-                      ) : isJson ? (
-                        <div
-                          className="flex flex-col items-center cursor-pointer"
-                          onClick={() =>
-                            !isSelectionMode && window.open(img.url, "_blank")
-                          }
-                        >
-                          <FileJson size={40} className="text-amber-500 mb-1" />
-                          <span className="text-[10px] font-bold text-amber-600 uppercase">
-                            JSON
-                          </span>
-                        </div>
-                      ) : isVideo ? (
-                        <div
-                          className="flex flex-col items-center cursor-pointer"
-                          onClick={() => !isSelectionMode && openPreview(img)}
-                        >
-                          <Video size={40} className="text-indigo-500 mb-1" />
-                          <span className="text-[10px] font-bold text-indigo-600 uppercase">
-                            Video
-                          </span>
-                        </div>
-                      ) : (
+                      {isImage ? (
                         <NextImage
                           src={img.url}
                           alt="asset"
@@ -511,11 +554,18 @@ const HomePage = () => {
                           className="object-cover cursor-pointer group-hover:scale-105 transition-transform"
                           onClick={() => !isSelectionMode && openPreview(img)}
                         />
+                      ) : (
+                        <div
+                          className="w-full h-full cursor-pointer"
+                          onClick={() => !isSelectionMode && openPreview(img)}
+                        >
+                          <FileIcon type={fileType} />
+                        </div>
                       )}
 
-                      {/* Desktop: hover delete button */}
+                      {/* Desktop hover delete */}
                       {!isSelectionMode && (
-                        <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20 hidden sm:flex">
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all z-20">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -530,28 +580,21 @@ const HomePage = () => {
                     </div>
 
                     <div className="p-3 bg-white">
-                      <div className="flex justify-between items-center mb-2">
+                      <div className="flex justify-between items-center mb-1">
                         <p className="text-[10px] font-bold text-slate-500">
                           ID: {img._id.slice(-6)}
                         </p>
-                        <p className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-400">
-                          {isPdf
-                            ? "PDF"
-                            : isJson
-                              ? "JSON"
-                              : isVideo
-                                ? "VIDEO"
-                                : "IMAGE"}
+                        <p className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-400 uppercase">
+                          {fileType}
                         </p>
                       </div>
-
-                      {/* ✅ Mobile: Delete button always visible */}
+                      {/* Mobile delete button */}
                       {!isSelectionMode && (
                         <button
                           onClick={() => handleSingleDelete(img._id)}
-                          className="sm:hidden w-full mt-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100 active:bg-red-100"
+                          className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-red-50 text-red-500 text-[11px] font-bold sm:hidden hover:bg-red-100 transition-colors"
                         >
-                          <Trash2 size={13} /> Delete
+                          <Trash2 size={12} /> Delete
                         </button>
                       )}
                     </div>
@@ -572,7 +615,6 @@ const HomePage = () => {
           >
             <X size={28} />
           </button>
-
           <div className="relative w-full max-w-5xl flex flex-col items-center gap-6">
             <div className="relative w-full h-[65vh] rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-black/20">
               {previewImage.type === "video" ? (
@@ -582,6 +624,16 @@ const HomePage = () => {
                   className="w-full h-full object-contain"
                   autoPlay
                 />
+              ) : previewImage.type === "audio" ? (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+                  <Music size={80} className="text-purple-400" />
+                  <audio
+                    src={previewImage.url}
+                    controls
+                    className="w-3/4"
+                    autoPlay
+                  />
+                </div>
               ) : (
                 <img
                   src={getPreviewUrl(previewImage, previewSize)}
@@ -619,13 +671,7 @@ const HomePage = () => {
                         key={key}
                         disabled={!isAvailable}
                         onClick={() => setPreviewSize(key)}
-                        className={`relative px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                          previewSize === key
-                            ? "bg-white text-slate-900 shadow-lg"
-                            : isAvailable
-                              ? "text-white/70 hover:text-white hover:bg-white/10"
-                              : "text-white/20 cursor-not-allowed"
-                        }`}
+                        className={`relative px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${previewSize === key ? "bg-white text-slate-900 shadow-lg" : isAvailable ? "text-white/70 hover:text-white hover:bg-white/10" : "text-white/20 cursor-not-allowed"}`}
                       >
                         {label}
                         {!isAvailable && key !== "original" && (
@@ -635,7 +681,6 @@ const HomePage = () => {
                     );
                   })}
                 </div>
-
                 <button
                   onClick={() =>
                     handleDownloadImage(
@@ -646,14 +691,14 @@ const HomePage = () => {
                   }
                   className="flex items-center justify-center gap-3 bg-white text-slate-900 px-10 py-3 rounded-2xl font-bold hover:bg-indigo-50 transition-all shadow-2xl active:scale-95"
                 >
-                  <Download size={18} />
-                  Download{" "}
+                  <Download size={18} /> Download{" "}
                   {previewSize === "original" ? "Original" : previewSize}
                 </button>
               </div>
             )}
 
-            {previewImage.type === "video" && (
+            {(previewImage.type === "video" ||
+              previewImage.type === "audio") && (
               <button
                 onClick={() =>
                   handleDownloadImage(
@@ -664,7 +709,7 @@ const HomePage = () => {
                 }
                 className="flex items-center justify-center gap-3 bg-white text-slate-900 px-12 py-4 rounded-2xl font-bold hover:bg-indigo-50 transition-all shadow-2xl active:scale-95"
               >
-                <Download size={20} /> Download Video
+                <Download size={20} /> Download File
               </button>
             )}
           </div>

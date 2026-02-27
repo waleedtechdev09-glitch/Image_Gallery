@@ -4,7 +4,7 @@ import { asyncMiddleware } from "../utils/asyncMiddleware.js";
 
 // Generate JWT token
 const generateToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "24h" });
 
 // Register
 export const registerUser = asyncMiddleware(async (req, res) => {

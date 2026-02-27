@@ -4,6 +4,18 @@ const API_URL = "https://media-lib.conn-api.com/api";
 
 export const getToken = () => localStorage.getItem("token");
 
+//  Auto logout when token expires (401 response)
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      window.location.href = "/";
+    }
+    return Promise.reject(error);
+  },
+);
+
 // FOLDER FETCHING
 export const fetchFoldersAPI = async (token: string) => {
   const res = await axios.get(`${API_URL}/folders`, {
@@ -49,7 +61,7 @@ export const resolveFolderPathAPI = async (
   return res.data.folderId;
 };
 
-// UPLOAD IMAGE
+// UPLOAD FILES
 export const uploadImagesAPI = async (
   token: string,
   files: File[],
@@ -63,31 +75,26 @@ export const uploadImagesAPI = async (
   }
 
   const res = await axios.post(`${API_URL}/images/upload-multiple`, formData, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
   return res.data;
 };
 
-// DELETE IMAGE
+// DELETE FILE
 export const deleteImageAPI = async (token: string, id: string) => {
   await axios.delete(`${API_URL}/images/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 };
 
-/**
- * ✨ MANUAL RESIZE IMAGE API
- * Matches Backend: router.post("/resize/:id", manualResize)
- */
+// MANUAL RESIZE
 export const resizeImageAPI = async (
   token: string,
   id: string,
   targetSize: number,
 ) => {
   const res = await axios.post(
-    `${API_URL}/images/resize/${id}`, // Ensure your backend route is exactly this
+    `${API_URL}/images/resize/${id}`,
     { targetSize },
     {
       headers: { Authorization: `Bearer ${token}` },
