@@ -14,11 +14,10 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// CORS Update: Ab ye localhost ke bajaye aapke AWS Frontend URL ko allow karega
+// CORS 
 app.use(cors({
-    origin: [
-        "https://media-lib.conn-api.com", // Aapka naya production domain (HTTPS ke saath)
-        "http://media-lib.conn-api.com",  // Safe side ke liye HTTP bhi
+    origin: [  // Safe side ke liye HTTP bhi
+        "https://image-gallery-ivaz.onrender.com",  
         "http://localhost:3000"           // Local testing ke liye
     ],
     credentials: true,

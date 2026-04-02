@@ -20,10 +20,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // ⚡ Next.js 15 ke liye ye dono settings try karein
+  // ✅ Next.js 15 के लिए सही devIndicators config
   devIndicators: {
-    appIsrStatus: false,
-    buildActivity: false, // Build activity indicator ko bhi off kar dein
+    position: "bottom-right", // Only valid property for devIndicators
   },
 };
 

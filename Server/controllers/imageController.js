@@ -7,7 +7,7 @@ import path from "path";
 
 console.log("🔑 RESIZER URL on startup:", process.env.RESIZER_SERVICE_URL);
 
-const RESIZER_SERVICE_URL = process.env.RESIZER_SERVICE_URL || "http://image-resizer-service.default.svc.cluster.local/resize-and-upload";
+const RESIZER_SERVICE_URL =  " https://image-gallery-1-647k.onrender.com/resize-and-upload";
 
 /**
  * HELPER: Cloudinary Resource Type Detector
