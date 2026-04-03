@@ -15,13 +15,20 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // CORS 
-app.use(cors({
-    origin: [  // Safe side ke liye HTTP bhi
-        "https://image-gallery-ivaz.onrender.com",  
-        "http://localhost:3000"           // Local testing ke liye
-    ],
+// app.use(cors({
+//     origin: [  // Safe side ke liye HTTP bhi
+//         "https://image-gallery-ivaz.onrender.com",  
+//         "http://localhost:3000"           // Local testing ke liye
+//     ],
+//     credentials: true,
+// }));
+
+app.use(
+  cors({
+    origin: true, // jo bhi request aaye usko allow kar do
     credentials: true,
-}));
+  })
+);
 
 // Test root route
 app.get("/", (req, res) => res.send("Library System API is Running"));

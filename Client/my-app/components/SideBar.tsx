@@ -40,7 +40,7 @@ const SideBar = ({
   setSelectedFolder,
   setGlobalLoading,
 }: SidebarProps) => {
-  const API_URL = "https://image-gallery-deploy.onrender.com/api";
+  const API_URL = "https://image-gallery-2-wk44.onrender.com/api";
   const token = getToken();
 
   const [isCreating, setIsCreating] = useState(false);

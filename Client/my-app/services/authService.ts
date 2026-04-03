@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "https://image-gallery-deploy.onrender.com/api/auth";
+const API_URL = "https://image-gallery-2-wk44.onrender.com/api/auth";
 // USER REGISTER
 export const registerUser = async (
   name: string,

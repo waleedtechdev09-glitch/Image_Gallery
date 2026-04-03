@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "https://image-gallery-deploy.onrender.com/api";
+const API_URL = "https://image-gallery-2-wk44.onrender.com/api";
 
 export const getToken = () => localStorage.getItem("token");
 
